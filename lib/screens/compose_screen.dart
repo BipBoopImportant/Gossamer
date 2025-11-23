@@ -16,6 +16,14 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   final _destCtrl = TextEditingController();
   final _msgCtrl = TextEditingController();
 
+  // Helper to clean scanned data (remove spaces, prefixes)
+  void _handleScanResult(String? raw) {
+    if (raw == null) return;
+    String clean = raw.trim();
+    if (clean.startsWith("gossamer:")) clean = clean.substring(9);
+    setState(() => _destCtrl.text = clean);
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -39,35 +47,18 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Contact Picker
-                      IconButton(
-                        icon: const Icon(UniconsLine.book_open, color: Color(0xFF6C63FF)),
-                        onPressed: () async {
-                          final result = await showModalBottomSheet<String>(
-                            context: context,
-                            backgroundColor: Colors.transparent,
-                            isScrollControlled: true,
-                            builder: (c) => const ContactPicker()
-                          );
-                          if (result != null) setState(() => _destCtrl.text = result);
-                        },
-                      ),
-                      // QR Scan
-                      IconButton(
-                        icon: const Icon(UniconsLine.qrcode_scan, color: Colors.white54),
-                        onPressed: () async {
-                          final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const QrScanScreen()));
-                          if (result != null) setState(() => _destCtrl.text = result);
-                        },
-                      ),
-                      // NFC Scan
-                      IconButton(
-                        icon: const Icon(UniconsLine.wifi_router, color: Colors.white54),
-                        onPressed: () async {
-                          final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const NfcScreen(myIdentity: null)));
-                          if (result != null) setState(() => _destCtrl.text = result);
-                        },
-                      ),
+                      IconButton(icon: const Icon(UniconsLine.book_open, color: Color(0xFF6C63FF)), onPressed: () async {
+                        final result = await showModalBottomSheet<String>(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (c) => const ContactPicker());
+                        _handleScanResult(result);
+                      }),
+                      IconButton(icon: const Icon(UniconsLine.qrcode_scan, color: Colors.white54), onPressed: () async {
+                        final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const QrScanScreen()));
+                        _handleScanResult(result);
+                      }),
+                      IconButton(icon: const Icon(UniconsLine.wifi_router, color: Colors.white54), onPressed: () async {
+                        final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const NfcScreen(myIdentity: null)));
+                        _handleScanResult(result);
+                      }),
                     ],
                   ),
                 ),
@@ -92,20 +83,15 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
                   height: 56,
                   child: ElevatedButton.icon(
                     onPressed: () async {
-                      if (_msgCtrl.text.isNotEmpty && _destCtrl.text.isNotEmpty) {
-                        // FIX: Auto-save to contacts if it's new
-                        // This ensures the UI doesn't crash by passing both arguments
-                        ref.read(addContactProvider)(_destCtrl.text, "Unknown ${_destCtrl.text.substring(0,4)}");
-                        
-                        // FIX: Pass BOTH destination and message
-                        await ref.read(chatProvider.notifier).sendMessage(_destCtrl.text, _msgCtrl.text);
-                        
+                      if (_msgCtrl.text.trim().isNotEmpty && _destCtrl.text.trim().isNotEmpty) {
+                        final dest = _destCtrl.text.trim();
+                        final msg = _msgCtrl.text.trim();
+                        ref.read(addContactProvider)(dest, "Unknown ${dest.substring(0,4)}");
+                        await ref.read(chatProvider.notifier).sendMessage(dest, msg);
                         if(context.mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Queued for Uplink")));
                         }
-                      } else {
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Destination and Message required")));
                       }
                     },
                     style: ElevatedButton.styleFrom(

@@ -16,10 +16,15 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _ctrl = TextEditingController();
 
+  String get _displayId {
+    if (widget.ghostId.length > 16) {
+      return "${widget.ghostId.substring(0, 6)}...${widget.ghostId.substring(widget.ghostId.length - 6)}";
+    }
+    return widget.ghostId;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Filter messages for this thread (Simple filtering by sender name/ID)
-    // In a real app, we'd have thread IDs. Here we filter by 'isMe' or 'SenderName'
     final allMessages = ref.watch(chatProvider);
     final thread = allMessages.where((m) => m.sender == widget.ghostId || (m.isMe && widget.ghostId == "Ghost")).toList();
 
@@ -30,13 +35,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         appBar: AppBar(
           backgroundColor: const Color(0xFF15151F),
           leading: IconButton(icon: const Icon(UniconsLine.arrow_left), onPressed: () => Navigator.pop(context)),
-          title: Text(widget.ghostId, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_displayId, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              const Text("ENCRYPTED DIRECT LINK", style: TextStyle(fontSize: 10, color: Color(0xFF00F0FF), letterSpacing: 1)),
+            ],
+          ),
         ),
         body: Column(
           children: [
             Expanded(
               child: ListView.builder(
-                reverse: true, // Build from bottom
+                reverse: true,
                 padding: const EdgeInsets.all(20),
                 itemCount: thread.length,
                 itemBuilder: (context, index) {
@@ -74,11 +85,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       const SizedBox(width: 12),
                       IconButton.filled(
                         onPressed: () {
-                          if (_ctrl.text.isNotEmpty) {
-                            // Send to this specific Ghost ID (Requires Hex in real usage)
-                            // For this UI, we send to a dummy hex if ghostId isn't a hex
+                          if (_ctrl.text.trim().isNotEmpty) {
                             String dest = widget.ghostId.length == 64 ? widget.ghostId : "0000000000000000000000000000000000000000000000000000000000000000";
-                            ref.read(chatProvider.notifier).sendMessage(dest, _ctrl.text);
+                            ref.read(chatProvider.notifier).sendMessage(dest, _ctrl.text.trim());
                             _ctrl.clear();
                             HapticFeedback.lightImpact();
                           }
