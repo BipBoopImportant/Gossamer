@@ -31,11 +31,12 @@ jobs:
         target: aarch64-linux-android
         override: true
 
-    - name: Install Cargo Expand
-      run: cargo install cargo-expand
-
-    - name: Install Bridge Codegen
-      run: cargo install flutter_rust_bridge_codegen --version 1.82.6
+    - name: Install Rust Tools
+      run: |
+        cargo install cargo-expand
+        # FIX: Install cargo-ndk to compile for Android
+        cargo install cargo-ndk
+        cargo install flutter_rust_bridge_codegen --version 1.82.6
 
     - name: Add Android Targets
       run: |
@@ -48,11 +49,10 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === GLOBAL GRADLE FIX ===
+    # Global Gradle Fixes
     - name: Apply Global Gradle Configuration
       run: |
         cat > gradle_fix.txt <<GRADLE_GLOBAL_FIX
-        
         ext {
             flutter = [
                 compileSdkVersion: 34,
@@ -62,7 +62,6 @@ jobs:
                 versionName: "1.0.0"
             ]
         }
-        
         subprojects {
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
@@ -82,11 +81,10 @@ jobs:
             }
         }
         GRADLE_GLOBAL_FIX
-        
         cat android/build.gradle >> gradle_fix.txt
         mv gradle_fix.txt android/build.gradle
 
-    # === KOTLIN FIX ===
+    # Kotlin Fix
     - name: Fix Kotlin Version
       run: |
         cat >> android/app/build.gradle <<GRADLE_KOTLIN_FIX
@@ -101,7 +99,7 @@ jobs:
         }
         GRADLE_KOTLIN_FIX
 
-    # === DEPENDENCY RESTORE (WITH VERSION LOCKS) ===
+    # Restore Dependencies
     - name: Restore Dependencies
       run: |
         flutter pub add ffi:^2.1.0
@@ -120,9 +118,9 @@ jobs:
         flutter pub add path_provider:^2.0.15
         flutter pub add permission_handler:^11.0.0
         flutter pub add flutter_blue_plus:^1.31.0
-        # FIX: Explicitly request v2.0.0 here
         flutter pub add flutter_ble_peripheral:^2.0.0
         
+    # Permissions
     - name: Inject Permissions
       run: |
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
@@ -130,10 +128,19 @@ jobs:
     - name: Get Dependencies
       run: flutter pub get
 
+    # 1. Generate Dart Bindings
     - name: Generate Rust Bridge
       run: |
         flutter_rust_bridge_codegen           --rust-input native/src/api.rs           --dart-output lib/bridge_generated.dart           --class-name Native
 
+    # 2. === CRITICAL FIX: COMPILE RUST FOR ANDROID ===
+    # We use cargo-ndk to build the .so files and place them in jniLibs
+    - name: Build Rust Library
+      run: |
+        cd native
+        cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o ../android/app/src/main/jniLibs build --release
+
+    # 3. Build APK (Now including the .so files)
     - name: Build APK
       run: flutter build apk --release --no-tree-shake-icons
 
