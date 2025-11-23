@@ -48,12 +48,13 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Use regex to replace the ENTIRE line ===
+    # === FIX: Use precise replacement to avoid syntax errors ===
     - name: Set MinSDK Version
       run: |
-        sed -i 's/minSdkVersion.*/minSdkVersion 21/' android/app/build.gradle
-        sed -i 's/compileSdkVersion.*/compileSdkVersion 34/' android/app/build.gradle
-        sed -i 's/targetSdkVersion.*/targetSdkVersion 34/' android/app/build.gradle
+        # We replace the variable reference with the integer literal
+        sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
+        sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
+        sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' android/app/build.gradle
 
     - name: Fix Kotlin Conflict
       run: |
@@ -85,10 +86,13 @@ jobs:
         flutter pub add mobile_scanner:^3.5.5
         flutter pub add uuid:^3.0.7
         flutter pub add path_provider:^2.0.15
+        flutter pub add permission_handler:^11.0.0
+        flutter pub add flutter_blue_plus:^1.31.0
+        flutter pub add flutter_ble_peripheral:^0.4.0
         
     - name: Inject Permissions
       run: |
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
         
     - name: Get Dependencies
       run: flutter pub get
