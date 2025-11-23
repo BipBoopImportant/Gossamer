@@ -7,9 +7,15 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-flutter_rust_bridge = "1.80"
+flutter_rust_bridge = "1.82.6"
 anyhow = "1.0"
-tokio = { version = "1", features = ["full"] }
+lazy_static = "1.4"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8"
-secp256k1 = { version = "0.27", features = ["global-context", "rand", "recovery"] }
+sha2 = "0.10"
+hmac = "0.12"
+hkdf = "0.12"
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+base64 = "0.21"
+hex = "0.4"
