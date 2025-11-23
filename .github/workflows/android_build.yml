@@ -48,12 +48,24 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Inject Configuration at the TOP of build.gradle ===
-    # We create a temporary file with our config, cat the original build.gradle to it,
-    # and then overwrite the original. This ensures our block runs first.
-    - name: Apply Global Gradle Configuration
+    # === FIX: Define the flutter.* properties globally ===
+    # This ensures plugins like flutter_blue_plus can read 'flutter.compileSdkVersion'
+    # even if they try to access it before our overrides.
+    - name: Inject Global Variables
       run: |
         cat > gradle_fix.txt <<GRADLE_GLOBAL_FIX
+        
+        // Force variables for all plugins
+        ext {
+            flutter = [
+                compileSdkVersion: 34,
+                minSdkVersion: 21,
+                targetSdkVersion: 34,
+                versionCode: 1,
+                versionName: "1.0.0"
+            ]
+        }
+        
         subprojects {
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
