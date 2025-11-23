@@ -59,10 +59,13 @@ jobs:
         flutter pub add qr_flutter:^4.1.0
         flutter pub add flutter_riverpod:^2.4.0
         flutter pub add intl:^0.18.0
+        flutter pub add share_plus:^7.0.0
+        flutter pub add nfc_manager:^3.3.0
         
+    # FIX: Inject NFC Permissions here in the Cloud Runner
     - name: Inject Permissions
       run: |
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>' android/app/src/main/AndroidManifest.xml
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
         
     - name: Get Dependencies
       run: flutter pub get

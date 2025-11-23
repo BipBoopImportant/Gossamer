@@ -29,3 +29,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   share_plus: ^7.0.0
+  nfc_manager: ^3.3.0
+  nfc_manager: ^3.3.0
