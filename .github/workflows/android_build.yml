@@ -48,28 +48,14 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    - name: Restore Dependencies
-      run: |
-        flutter pub add ffi:^2.1.0
-        flutter pub add flutter_rust_bridge:^1.80.0
-        flutter pub add google_fonts
-        flutter pub add flutter_animate
-        flutter pub add unicons
-        flutter pub add glass_kit
-        flutter pub add qr_flutter:^4.1.0
-        flutter pub add flutter_riverpod:^2.4.0
-        flutter pub add intl:^0.18.0
-        flutter pub add share_plus:^7.0.0
-        flutter pub add nfc_manager:^3.3.0
+    # Dependencies are now in pubspec.yaml, just get them
+    - name: Get Dependencies
+      run: flutter pub get
         
-    # FIX: Inject NFC Permissions here in the Cloud Runner
     - name: Inject Permissions
       run: |
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
         
-    - name: Get Dependencies
-      run: flutter pub get
-
     - name: Generate Rust Bridge
       run: |
         flutter_rust_bridge_codegen           --rust-input native/src/api.rs           --dart-output lib/bridge_generated.dart           --class-name Native
