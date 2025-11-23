@@ -9,23 +9,24 @@ dependencies:
     sdk: flutter
   flutter_rust_bridge: ^1.80.0
   
-  # UI
-  google_fonts: ^6.1.0
-  flutter_animate: ^4.2.0
-  unicons: ^2.0.0
-  glass_kit: ^3.0.0
-  intl: ^0.18.0
+  # BLE Hardware
+  flutter_blue_plus: ^1.31.0
+  flutter_ble_peripheral: ^0.4.0
+  permission_handler: ^11.0.0
   
-  # Hardware & Storage
+  # Standard
   path_provider: ^2.0.15
   nfc_manager: ^3.3.0
   share_plus: ^7.0.0
   mobile_scanner: ^3.5.5
-  
-  # Logic
   flutter_riverpod: ^2.4.0
   qr_flutter: ^4.1.0
   uuid: ^3.0.7
+  intl: ^0.18.0
+  google_fonts: ^6.1.0
+  flutter_animate: ^4.2.0
+  unicons: ^2.0.0
+  glass_kit: ^3.0.0
 
 dev_dependencies:
   flutter_test:

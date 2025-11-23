@@ -5,13 +5,17 @@ Gossamer is a metadata-private, delay-tolerant messaging system built with **Flu
 ## Features
 - **Zero Metadata:** Messages are routed via rolling hash identifiers.
 - **End-to-End Encryption:** XChaCha20-Poly1305 by default.
-- **Store & Forward:** Works via global relays (Nostr) and local mesh (Future BLE).
+- **Hybrid Network:**
+  - **Internet:** NIP-01 Nostr Relays (Global)
+  - **Local Mesh:** Bluetooth Low Energy (BLE) Advertising (Proximity)
 - **Identity:** Ephemeral identities with QR and NFC exchange.
 
 ## Architecture
 - **Frontend:** Flutter (Material 3, Riverpod, Animations)
 - **Backend:** Rust (Tokio, Sqlite, Secp256k1)
-- **Protocol:** NIP-01 (Nostr) + Custom Rolling Mailbox
+- **Bridge:** flutter_rust_bridge FFI
 
-## Build
-This project builds automatically via GitHub Actions.
+## Usage
+1. Exchange keys via QR/NFC.
+2. Send message.
+3. App attempts delivery via Relay AND Bluetooth Broadcast simultaneously.

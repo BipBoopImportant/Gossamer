@@ -2,12 +2,11 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use flutter_rust_bridge::StreamSink;
-use crate::core::{crypto, db, net};
+use crate::core::{crypto, db, net, mesh};
 use tokio::runtime::Runtime;
 
 lazy_static! {
     static ref DB_PATH: Mutex<String> = Mutex::new("gossamer.db".to_string());
-    // FIX: Single Global Runtime prevents thread exhaustion
     static ref RUNTIME: Runtime = Runtime::new().unwrap();
 }
 
@@ -30,20 +29,31 @@ pub fn get_my_identity() -> Result<String> {
 
 pub fn send_message(dest_hex: String, content: String) -> Result<()> {
     let dest_bytes = hex::decode(dest_hex)?;
-    
-    // Use Global Runtime
+    // Network Send
     RUNTIME.block_on(net::send_to_relay(&dest_bytes, &content))?;
     
+    // Local Save
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
     db.save_message(&uuid::Uuid::new_v4().to_string(), "Me", &content, true)?;
     Ok(())
 }
 
+// NEW: Generate data for BLE Advertising
+pub fn prepare_mesh_packet(dest_hex: String, content: String) -> Result<Vec<u8>> {
+    let dest_bytes = hex::decode(dest_hex)?;
+    mesh::generate_advertisement_packet(&dest_bytes, &content)
+}
+
+// NEW: Process data from BLE Scanning
+pub fn ingest_mesh_packet(data: Vec<u8>) -> Result<()> {
+    let path = DB_PATH.lock().unwrap().clone();
+    mesh::handle_incoming_bytes(&data, &path)
+}
+
 pub fn sync_messages() -> Result<Vec<ChatMessage>> {
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
-    
     if let Ok(Some(my_id)) = db.get_identity() {
         if let Ok(new_msgs) = RUNTIME.block_on(net::check_relay(&my_id)) {
             for msg in new_msgs {
@@ -51,7 +61,6 @@ pub fn sync_messages() -> Result<Vec<ChatMessage>> {
             }
         }
     }
-
     let rows = db.get_messages()?;
     let mut result = Vec::new();
     for (id, sender, text, time, is_me) in rows {
