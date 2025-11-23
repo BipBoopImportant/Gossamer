@@ -48,14 +48,11 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Define the flutter.* properties globally ===
-    # This ensures plugins like flutter_blue_plus can read 'flutter.compileSdkVersion'
-    # even if they try to access it before our overrides.
-    - name: Inject Global Variables
+    # === GLOBAL GRADLE FIX ===
+    - name: Apply Global Gradle Configuration
       run: |
         cat > gradle_fix.txt <<GRADLE_GLOBAL_FIX
         
-        // Force variables for all plugins
         ext {
             flutter = [
                 compileSdkVersion: 34,
@@ -89,7 +86,7 @@ jobs:
         cat android/build.gradle >> gradle_fix.txt
         mv gradle_fix.txt android/build.gradle
 
-    # Fix Kotlin Version Conflict
+    # === KOTLIN FIX ===
     - name: Fix Kotlin Version
       run: |
         cat >> android/app/build.gradle <<GRADLE_KOTLIN_FIX
@@ -104,6 +101,7 @@ jobs:
         }
         GRADLE_KOTLIN_FIX
 
+    # === DEPENDENCY RESTORE (WITH VERSION LOCKS) ===
     - name: Restore Dependencies
       run: |
         flutter pub add ffi:^2.1.0
@@ -122,7 +120,8 @@ jobs:
         flutter pub add path_provider:^2.0.15
         flutter pub add permission_handler:^11.0.0
         flutter pub add flutter_blue_plus:^1.31.0
-        flutter pub add flutter_ble_peripheral:^0.4.0
+        # FIX: Explicitly request v2.0.0 here
+        flutter pub add flutter_ble_peripheral:^2.0.0
         
     - name: Inject Permissions
       run: |

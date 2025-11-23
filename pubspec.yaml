@@ -18,8 +18,7 @@ dependencies:
   
   # Hardware
   flutter_blue_plus: ^1.31.0
-  # FIX: Use the version suggested by the build tool
-  flutter_ble_peripheral: ^2.0.1
+  flutter_ble_peripheral: ^2.0.0
   permission_handler: ^11.0.0
   nfc_manager: ^3.3.0
   share_plus: ^7.0.0
