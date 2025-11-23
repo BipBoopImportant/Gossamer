@@ -1,25 +1,23 @@
 use anyhow::Result;
-use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use chacha20poly1305::{aead::{Aead, KeyInit, OsRng}, XChaCha20Poly1305, XNonce};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::{RngCore, thread_rng};
 use sha2::Sha256;
-use base64::prelude::*;
+use secp256k1::{Secp256k1, KeyPair, XOnlyPublicKey};
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub fn derive_key(pin: &str) -> Result<String> {
-    let salt = SaltString::encode_b64(b"gossamer_salt_v1").map_err(|e| anyhow::anyhow!(e))?;
-    let argon2 = Argon2::default();
-    let hash = argon2.hash_password(pin.as_bytes(), &salt).map_err(|e| anyhow::anyhow!(e))?;
-    Ok(hash.to_string())
+pub fn generate_identity() -> Vec<u8> {
+    let mut key = [0u8; 32];
+    thread_rng().fill_bytes(&mut key);
+    key.to_vec()
 }
 
-pub fn generate_mailbox(root: &[u8], time: u64) -> String {
-    let slot = time / 3600;
+pub fn generate_mailbox(root: &[u8], timestamp: u64) -> String {
+    let time_slot = timestamp / 3600;
     let mut mac = <HmacSha256 as Mac>::new_from_slice(root).expect("HMAC");
-    mac.update(&slot.to_be_bytes());
+    mac.update(&time_slot.to_be_bytes());
     hex::encode(mac.finalize().into_bytes())
 }
 
@@ -41,4 +39,10 @@ pub fn decrypt(root: &[u8], nonce: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     hk.expand(b"gossamer_enc", &mut key).unwrap();
     let cipher = XChaCha20Poly1305::new_from_slice(&key).unwrap();
     cipher.decrypt(XNonce::from_slice(nonce), data).map_err(|_| anyhow::anyhow!("Dec failed"))
+}
+
+pub fn get_ephemeral_signer() -> (KeyPair, XOnlyPublicKey) {
+    let secp = Secp256k1::new();
+    let (sk, pk) = secp.generate_keypair(&mut thread_rng());
+    (sk, pk)
 }

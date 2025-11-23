@@ -1,69 +1,55 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../bridge_generated.dart';
 import 'package:flutter/foundation.dart';
-import '../main.dart'; // For global FFI access if needed
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:ffi';
 
-// We assume a global 'api' variable is available or we create one.
-// For simplicity in this script, we define the singleton here.
-final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
-    ? io.DynamicLibrary.executable()
-    : io.DynamicLibrary.open('libnative.so'));
+// Setup FFI
+final api = NativeImpl(Platform.isIOS || Platform.isMacOS
+    ? DynamicLibrary.executable()
+    : DynamicLibrary.open('libnative.so'));
 
-import 'dart:io' as io;
-import 'dart:ffi' as ffi;
-
-class Message {
-  final String id;
-  final String sender;
-  final String text;
-  final DateTime time;
-  final bool isMe;
-  Message(this.id, this.sender, this.text, this.time, this.isMe);
-}
-
-class ChatNotifier extends StateNotifier<List<Message>> {
+class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   ChatNotifier() : super([]);
 
   Future<void> initialize() async {
     try {
-      await api.initCore();
-      // Load some initial dummy data + check inbox
-      final msgs = await api.checkInboxMock();
-      for (var m in msgs) {
-        state = [...state, Message(DateTime.now().toString(), "System", m, DateTime.now(), false)];
-      }
+      final dir = await getApplicationDocumentsDirectory();
+      await api.initCore(appFilesDir: dir.path);
+      await sync();
     } catch (e) {
-      debugPrint("Core Init Failed: $e");
+      debugPrint("Init Error: $e");
     }
   }
 
-  Future<void> sendMessage(String text) async {
-    // Optimistic UI Update
-    final tempId = DateTime.now().toString();
-    state = [...state, Message(tempId, "Me", text, DateTime.now(), true)];
-    
+  Future<void> sync() async {
     try {
-      // Call Rust (Simulated Network)
-      // Using a dummy key for demo
-      await api.sendMessageMock(destHex: "0000000000000000000000000000000000000000000000000000000000000000", msg: text);
+      final msgs = await api.syncMessages();
+      state = msgs;
     } catch (e) {
-      // Error handling (could mark message as failed)
+      debugPrint("Sync Error: $e");
     }
   }
-  
-  void deleteMessage(String id) {
-    state = state.where((m) => m.id != id).toList();
+
+  Future<void> sendMessage(String dest, String text) async {
+    try {
+      await api.sendMessage(destHex: dest, content: text);
+      await sync(); // Refresh list
+    } catch (e) {
+      debugPrint("Send Error: $e");
+    }
   }
 }
 
-final chatProvider = StateNotifierProvider<ChatNotifier, List<Message>>((ref) {
+final chatProvider = StateNotifierProvider<ChatNotifier, List<ChatMessage>>((ref) {
   final notifier = ChatNotifier();
-  notifier.initialize(); // Auto-init
+  notifier.initialize();
   return notifier;
 });
 
-// Provider for Identity
 final identityProvider = FutureProvider<String>((ref) async {
-  await api.initCore(); // Ensure core is ready
-  return api.getIdentity();
+  final dir = await getApplicationDocumentsDirectory();
+  await api.initCore(appFilesDir: dir.path);
+  return api.getMyIdentity();
 });
