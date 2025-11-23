@@ -31,8 +31,9 @@ jobs:
         target: aarch64-linux-android
         override: true
 
+    # === FIX: Pin specific version to 1.82.6 (Last v1 release) ===
     - name: Install Bridge Codegen
-      run: cargo install flutter_rust_bridge_codegen
+      run: cargo install flutter_rust_bridge_codegen --version 1.82.6
 
     - name: Add Android Targets
       run: |
@@ -40,7 +41,6 @@ jobs:
         rustup target add armv7-linux-androideabi
         rustup target add x86_64-linux-android
 
-    # === FIX: Explicitly set project-name to lowercase ===
     - name: Repair Android Project
       run: |
         rm -rf android
