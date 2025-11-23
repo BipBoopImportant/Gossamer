@@ -29,26 +29,31 @@ pub fn get_my_identity() -> Result<String> {
 
 pub fn send_message(dest_hex: String, content: String) -> Result<()> {
     let dest_bytes = hex::decode(dest_hex)?;
-    // Network Send
     RUNTIME.block_on(net::send_to_relay(&dest_bytes, &content))?;
-    
-    // Local Save
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
     db.save_message(&uuid::Uuid::new_v4().to_string(), "Me", &content, true)?;
     Ok(())
 }
 
-// NEW: Generate data for BLE Advertising
 pub fn prepare_mesh_packet(dest_hex: String, content: String) -> Result<Vec<u8>> {
     let dest_bytes = hex::decode(dest_hex)?;
     mesh::generate_advertisement_packet(&dest_bytes, &content)
 }
 
-// NEW: Process data from BLE Scanning
 pub fn ingest_mesh_packet(data: Vec<u8>) -> Result<()> {
     let path = DB_PATH.lock().unwrap().clone();
     mesh::handle_incoming_bytes(&data, &path)
+}
+
+// NEW: Fetch a packet for multi-hop rotation
+pub fn get_transit_packet() -> Result<Vec<u8>> {
+    let path = DB_PATH.lock().unwrap().clone();
+    if let Ok(Some(packet)) = mesh::get_next_packet_to_broadcast(&path) {
+        return Ok(packet);
+    }
+    // Fallback: Return empty to signal "No transit data, broadcast default"
+    Ok(Vec::new())
 }
 
 pub fn sync_messages() -> Result<Vec<ChatMessage>> {

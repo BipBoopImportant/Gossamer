@@ -12,6 +12,7 @@ class MeshController {
 
   final FlutterBlePeripheral _peripheral = FlutterBlePeripheral();
   bool _isScanning = false;
+  Timer? _rotationTimer;
 
   Future<void> init() async {
     if (await Permission.bluetooth.request().isDenied) return;
@@ -20,11 +21,9 @@ class MeshController {
     if (await Permission.bluetoothConnect.request().isDenied) return;
     if (await Permission.location.request().isDenied) return;
 
-    // Configure Peripheral (Advertising)
-    // We use a specific UUID for filtering, but the payload is in Manufacturer Data
     await _peripheral.initialize();
-    
     startScanning();
+    _startPacketRotation();
   }
 
   void startScanning() {
@@ -33,12 +32,10 @@ class MeshController {
 
     FlutterBluePlus.scanResults.listen((results) {
       for (ScanResult r in results) {
-        // 0xFFFF is our testing Manufacturer ID
         if (r.advertisementData.manufacturerData.containsKey(0xFFFF)) {
           final data = r.advertisementData.manufacturerData[0xFFFF];
           if (data != null && data.isNotEmpty) {
-            // Feed binary data to Rust
-            // Rust will determine if the packet is for us based on the compact header
+            // Rust determines if it's for us OR saves it to transit
             api.ingestMeshPacket(data: Uint8List.fromList(data));
           }
         }
@@ -46,34 +43,52 @@ class MeshController {
     });
 
     FlutterBluePlus.startScan(
-      // LowLatency is crucial for mesh networking to catch brief advertisements
-      androidScanMode: AndroidScanMode.lowLatency, 
+      androidScanMode: AndroidScanMode.lowLatency,
       allowDuplicates: true,
     );
   }
 
+  // NEW: Multi-Hop Loop
+  // Every 20 seconds, ask Rust for a transit packet and broadcast it.
+  void _startPacketRotation() {
+    _rotationTimer?.cancel();
+    _rotationTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      try {
+        // Ask Rust for a packet from the "Transit" pool
+        final packet = await api.getTransitPacket();
+        
+        if (packet.isNotEmpty) {
+          debugPrint("Mesh: Relaying transit packet (${packet.length} bytes)");
+          await _peripheral.stop(); // Stop current ad
+          
+          final AdvertiseData data = AdvertiseData(
+            manufacturerId: 0xFFFF,
+            manufacturerData: packet,
+            includeDeviceName: false,
+          );
+          await _peripheral.start(advertiseData: data);
+        }
+      } catch (e) {
+        debugPrint("Rotation Error: $e");
+      }
+    });
+  }
+
   Future<void> broadcastMessage(String destHex, String content) async {
     try {
+      // Immediate Priority Broadcast
       final packet = await api.prepareMeshPacket(destHex: destHex, content: content);
-      
-      // SAFETY CHECK: BLE Packets are tiny (~27 bytes max usually)
-      // If packet is too big, it won't broadcast.
-      // For this MVP, we assume short messages ("Hi", "Here").
-      if (packet.length > 24) {
-        debugPrint("Warning: Packet size ${packet.length} exceeds BLE legacy limit. Might fail on some devices.");
-      }
+      if (packet.length > 24) debugPrint("Packet size warning");
 
+      await _peripheral.stop();
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
         manufacturerData: packet,
         includeDeviceName: false,
       );
-      
-      // Cycle advertising to ensure it's picked up
       await _peripheral.start(advertiseData: data);
-      await Future.delayed(const Duration(seconds: 10));
-      await _peripheral.stop();
       
+      // Let it run for 15s before rotation takes over
     } catch (e) {
       debugPrint("Broadcast Error: $e");
     }
