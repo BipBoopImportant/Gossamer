@@ -47,7 +47,7 @@ pub fn decrypt(root: &[u8], nonce: &[u8], data: &[u8]) -> Result<Vec<u8>> {
 
 pub fn get_ephemeral_signer() -> (KeyPair, XOnlyPublicKey) {
     let secp = Secp256k1::new();
+    // FIX: Correctly return the KeyPair and Public Key as a tuple
     let (sk, pk) = secp.generate_keypair(&mut thread_rng());
-    // FIX: Ensure return types match expected tuple
     (sk, pk)
 }
