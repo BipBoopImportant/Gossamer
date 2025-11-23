@@ -10,11 +10,30 @@ class GossamerTheme {
       brightness: Brightness.dark,
       primary: const Color(0xFF6C63FF),
       secondary: const Color(0xFF00F0FF),
-      surface: const Color(0xFF0F0F13),
+      tertiary: const Color(0xFFFF005C),
+      surface: const Color(0xFF15151F),
       background: const Color(0xFF050507),
     ),
     textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
     scaffoldBackgroundColor: const Color(0xFF050507),
-    appBarTheme: const AppBarTheme(backgroundColor: Colors.transparent, elevation: 0),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+    ),
+    // Sexy Input Fields
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF1A1A24),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1),
+      ),
+      contentPadding: const EdgeInsets.all(20),
+    ),
   );
 }

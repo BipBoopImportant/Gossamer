@@ -8,13 +8,18 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_rust_bridge: ^1.80.0
+  
+  # UI & Polish
   google_fonts: ^6.1.0
   flutter_animate: ^4.2.0
   unicons: ^2.0.0
   glass_kit: ^3.0.0
-  qr_flutter: ^4.1.0  # Added for Identity
-  flutter_services_binding: ^0.2.0
-
+  qr_flutter: ^4.1.0
+  intl: ^0.18.0  # For timestamps
+  
+  # State Management
+  flutter_riverpod: ^2.4.0
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

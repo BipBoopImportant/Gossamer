@@ -3,37 +3,69 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:unicons/unicons.dart';
 import 'settings_sheet.dart';
 import 'compose_screen.dart';
+import 'dart:math' as math;
 
-class RadarScreen extends StatelessWidget {
+class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
+  @override
+  State<RadarScreen> createState() => _RadarScreenState();
+}
+
+class _RadarScreenState extends State<RadarScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (c) => const ComposeScreen()));
-        },
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const ComposeScreen())),
         backgroundColor: const Color(0xFF6C63FF),
+        elevation: 10,
         icon: const Icon(UniconsLine.plus, color: Colors.white),
-        label: const Text("NEW MESSAGE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text("NEW MESSAGE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
       ),
       body: Stack(
         children: [
+          // 1. Deep Background
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment.center,
-                  radius: 1.2,
-                  colors: [Color(0xFF2A2A3D), Color(0xFF050507)],
-                  stops: [0.0, 1.0]
+                  radius: 1.3,
+                  colors: [Color(0xFF1E1E2C), Color(0xFF050507)],
+                  stops: [0.0, 1.0],
                 ),
               ),
             ),
           ),
-          Center(child: _buildRipples()),
+
+          // 2. Rotating Scanner Beam
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (_, __) {
+                return CustomPaint(
+                  painter: RadarPainter(_controller.value),
+                );
+              },
+            ),
+          ),
+
+          // 3. The Core
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -41,33 +73,37 @@ class RadarScreen extends StatelessWidget {
                 Stack(
                   alignment: Alignment.center,
                   children: [
+                    // Pulse Ring
                     Container(
-                      width: 160, height: 160,
+                      width: 180, height: 180,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [const Color(0xFF6C63FF).withOpacity(0.3), Colors.transparent],
-                        ),
+                        border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.2), width: 1),
                       ),
-                    ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2), duration: 2.seconds),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1), duration: 2.seconds),
+                    
+                    // Icon Container
                     Container(
                       width: 80, height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: const Color(0xFF15151F),
                         border: Border.all(color: const Color(0xFF6C63FF), width: 2),
+                        boxShadow: [BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.6), blurRadius: 30)]
                       ),
                       child: const Icon(UniconsLine.cube, size: 40, color: Colors.white),
                     ),
                   ],
                 ),
                 const SizedBox(height: 40),
-                const Text("MESH ACTIVE", style: TextStyle(color: Color(0xFF00F0FF), fontWeight: FontWeight.w900, letterSpacing: 3, fontSize: 14)),
+                const Text("MESH ONLINE", style: TextStyle(color: Color(0xFF00F0FF), fontWeight: FontWeight.w900, letterSpacing: 4, fontSize: 14)).animate().fadeIn().shimmer(duration: 3.seconds),
                 const SizedBox(height: 8),
-                Text("Scanning frequency 2.4GHz...", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+                Text("Relay: wss://damus.io", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12, fontFamily: 'monospace')),
               ],
             ),
           ),
+
+          // 4. Header
           Positioned(
             top: 0, left: 0, right: 0,
             child: SafeArea(
@@ -90,16 +126,34 @@ class RadarScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildRipples() {
-    return Stack(
-      alignment: Alignment.center,
-      children: List.generate(3, (index) {
-        return Container(
-          width: 300, height: 300,
-          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.03), width: 1)),
-        ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.5, 0.5), end: const Offset(1.5, 1.5), duration: Duration(seconds: 3 + index)).fadeOut(duration: Duration(seconds: 3 + index));
-      }),
-    );
+class RadarPainter extends CustomPainter {
+  final double rotation;
+  RadarPainter(this.rotation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.8;
+    final paint = Paint()
+      ..shader = SweepGradient(
+        colors: [Colors.transparent, const Color(0xFF6C63FF).withOpacity(0.1), Colors.transparent],
+        stops: const [0.0, 0.2, 1.0],
+        startAngle: 0.0,
+        endAngle: math.pi / 2,
+        transform: GradientRotation(rotation * 2 * math.pi),
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    canvas.drawCircle(center, radius, paint);
+    
+    // Draw faint rings
+    final ringPaint = Paint()..color = Colors.white.withOpacity(0.03)..style = PaintingStyle.stroke..strokeWidth = 1;
+    canvas.drawCircle(center, radius * 0.3, ringPaint);
+    canvas.drawCircle(center, radius * 0.6, ringPaint);
+    canvas.drawCircle(center, radius * 0.9, ringPaint);
   }
+
+  @override
+  bool shouldRepaint(RadarPainter oldDelegate) => oldDelegate.rotation != rotation;
 }
