@@ -1,0 +1,23 @@
+name: gossamer_app
+description: Decentralized Mesh Messenger
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: ^1.80.0
+  google_fonts: ^6.1.0
+  flutter_animate: ^4.2.0
+  unicons: ^2.0.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  ffigen: ^8.0.0
+
+flutter:
+  uses-material-design: true
