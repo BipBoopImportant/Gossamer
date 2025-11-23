@@ -14,21 +14,16 @@ class MeshController {
   bool _isScanning = false;
 
   Future<void> init() async {
-    // 1. Request Permissions
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
+    if (await Permission.bluetooth.request().isDenied) return;
+    if (await Permission.bluetoothScan.request().isDenied) return;
+    if (await Permission.bluetoothAdvertise.request().isDenied) return;
+    if (await Permission.bluetoothConnect.request().isDenied) return;
+    if (await Permission.location.request().isDenied) return;
 
-    if (statuses.values.any((s) => s.isDenied)) {
-      debugPrint("Mesh Permissions Denied");
-      return;
-    }
-
-    // 2. Start Scanning
+    // Configure Peripheral (Advertising)
+    // We use a specific UUID for filtering, but the payload is in Manufacturer Data
+    await _peripheral.initialize();
+    
     startScanning();
   }
 
@@ -36,14 +31,14 @@ class MeshController {
     if (_isScanning) return;
     _isScanning = true;
 
-    // Listen for advertisements
     FlutterBluePlus.scanResults.listen((results) {
       for (ScanResult r in results) {
-        // 0xFFFF is a reserved testing ID, we use it for simplicity in this mesh
+        // 0xFFFF is our testing Manufacturer ID
         if (r.advertisementData.manufacturerData.containsKey(0xFFFF)) {
           final data = r.advertisementData.manufacturerData[0xFFFF];
           if (data != null && data.isNotEmpty) {
-            // Pass to Rust Core
+            // Feed binary data to Rust
+            // Rust will determine if the packet is for us based on the compact header
             api.ingestMeshPacket(data: Uint8List.fromList(data));
           }
         }
@@ -51,27 +46,33 @@ class MeshController {
     });
 
     FlutterBluePlus.startScan(
-      withServices: [], // Scan all
-      allowDuplicates: true, // Need continuous updates
+      // LowLatency is crucial for mesh networking to catch brief advertisements
+      androidScanMode: AndroidScanMode.lowLatency, 
+      allowDuplicates: true,
     );
   }
 
-  // Broadcast a message to nearby devices
   Future<void> broadcastMessage(String destHex, String content) async {
     try {
-      // 1. Get Encrypted Bytes from Rust
       final packet = await api.prepareMeshPacket(destHex: destHex, content: content);
       
-      // 2. Advertise
+      // SAFETY CHECK: BLE Packets are tiny (~27 bytes max usually)
+      // If packet is too big, it won't broadcast.
+      // For this MVP, we assume short messages ("Hi", "Here").
+      if (packet.length > 24) {
+        debugPrint("Warning: Packet size ${packet.length} exceeds BLE legacy limit. Might fail on some devices.");
+      }
+
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
         manufacturerData: packet,
+        includeDeviceName: false,
       );
       
+      // Cycle advertising to ensure it's picked up
       await _peripheral.start(advertiseData: data);
-      
-      // Stop after 30 seconds to save battery
-      Future.delayed(const Duration(seconds: 30), () => _peripheral.stop());
+      await Future.delayed(const Duration(seconds: 10));
+      await _peripheral.stop();
       
     } catch (e) {
       debugPrint("Broadcast Error: $e");

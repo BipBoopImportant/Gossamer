@@ -29,3 +29,4 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 futures-util = "0.3"
 url = "2.4"
 uuid = { version = "1.4", features = ["v4"] }
+bincode = "1.3"

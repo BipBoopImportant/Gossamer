@@ -21,16 +21,22 @@ pub fn generate_mailbox(root: &[u8], timestamp: u64) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
+// Standard Encrypt (Random Nonce)
 pub fn encrypt(root: &[u8], data: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
     let mut nonce = [0u8; 24];
     OsRng.fill_bytes(&mut nonce);
-    let hk = Hkdf::<Sha256>::new(Some(&nonce), root);
+    encrypt_with_fixed_nonce(root, data, &nonce)
+}
+
+// New: Encrypt with provided nonce (For compact BLE)
+pub fn encrypt_with_fixed_nonce(root: &[u8], data: &[u8], nonce_bytes: &[u8; 24]) -> Result<(Vec<u8>, Vec<u8>)> {
+    let hk = Hkdf::<Sha256>::new(Some(nonce_bytes), root);
     let mut key = [0u8; 32];
     hk.expand(b"gossamer_enc", &mut key).unwrap();
     
     let cipher = XChaCha20Poly1305::new_from_slice(&key).unwrap();
-    let ct = cipher.encrypt(XNonce::from_slice(&nonce), data).map_err(|_| anyhow::anyhow!("Enc failed"))?;
-    Ok((ct, nonce.to_vec()))
+    let ct = cipher.encrypt(XNonce::from_slice(nonce_bytes), data).map_err(|_| anyhow::anyhow!("Enc failed"))?;
+    Ok((ct, nonce_bytes.to_vec()))
 }
 
 pub fn decrypt(root: &[u8], nonce: &[u8], data: &[u8]) -> Result<Vec<u8>> {
