@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
-use rand::seq::SliceRandom; // For random picking
+use rand::seq::SliceRandom;
 
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -11,7 +11,9 @@ impl Database {
     pub fn init(path: String) -> Result<Self> {
         let conn = Connection::open(path)?;
         
-        // Standard Tables
+        // Standard SQLite Initialization
+        conn.execute("PRAGMA journal_mode=WAL;", [])?;
+        
         conn.execute("CREATE TABLE IF NOT EXISTS messages (
             id TEXT PRIMARY KEY,
             sender TEXT NOT NULL,
@@ -30,10 +32,8 @@ impl Database {
             alias TEXT NOT NULL
         )", [])?;
 
-        // NEW: Transit Table (For Multi-Hop)
-        // Stores encrypted blobs we heard but couldn't read
         conn.execute("CREATE TABLE IF NOT EXISTS transit (
-            hash TEXT PRIMARY KEY, -- Hash of packet to prevent duplicates
+            hash TEXT PRIMARY KEY,
             packet BLOB,
             received_at INTEGER
         )", [])?;
@@ -41,7 +41,6 @@ impl Database {
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 
-    // ... [Existing Methods: save_message, get_messages, get_identity, save_identity, contacts] ...
     pub fn save_message(&self, id: &str, sender: &str, content: &str, is_me: bool) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
@@ -87,24 +86,13 @@ impl Database {
         Ok(res)
     }
 
-    // NEW: Transit Logic
     pub fn save_transit(&self, packet: &[u8]) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        // Hash the packet to use as ID
         let hash = md5::compute(packet); 
         let hash_hex = format!("{:x}", hash);
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
-        
-        // Insert (Ignore if we already have it)
-        conn.execute(
-            "INSERT OR IGNORE INTO transit (hash, packet, received_at) VALUES (?1, ?2, ?3)", 
-            params![hash_hex, packet, now]
-        )?;
-        
-        // Cleanup old packets (Keep DB lean, max 100 stored packets)
-        // In real prod, use DELETE WHERE received_at < (now - 24h)
+        conn.execute("INSERT OR IGNORE INTO transit (hash, packet, received_at) VALUES (?1, ?2, ?3)", params![hash_hex, packet, now])?;
         conn.execute("DELETE FROM transit WHERE rowid NOT IN (SELECT rowid FROM transit ORDER BY received_at DESC LIMIT 100)", [])?;
-        
         Ok(())
     }
 
@@ -112,9 +100,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT packet FROM transit ORDER BY RANDOM() LIMIT 1")?;
         let mut rows = stmt.query([]);
-        if let Ok(Some(row)) = rows.next() {
-            return Ok(Some(row.get(0)?));
-        }
+        if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
     }
 }
