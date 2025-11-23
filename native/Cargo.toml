@@ -22,13 +22,10 @@ chacha20poly1305 = "0.10"
 argon2 = "0.5"
 base64 = "0.21"
 hex = "0.4"
-# Specific version compatible with nostr protocol
 secp256k1 = { version = "0.27", features = ["rand", "serde", "global-context", "recovery"] }
-# WebSocket for Nostr
 tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 futures-util = "0.3"
 url = "2.4"
 uuid = { version = "1.4", features = ["v4"] }
 bincode = "1.3"
-md5 = "0.7"
 md5 = "0.7"
