@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:ffi';
 
-// Setup FFI
 final api = NativeImpl(Platform.isIOS || Platform.isMacOS
     ? DynamicLibrary.executable()
     : DynamicLibrary.open('libnative.so'));
@@ -19,13 +18,15 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
       await api.initCore(appFilesDir: dir.path);
       await sync();
     } catch (e) {
-      debugPrint("Init Error: $e");
+      debugPrint("Core Init Error: $e");
     }
   }
 
   Future<void> sync() async {
     try {
       final msgs = await api.syncMessages();
+      // Sort by time descending for UI
+      msgs.sort((a, b) => b.time.compareTo(a.time));
       state = msgs;
     } catch (e) {
       debugPrint("Sync Error: $e");
@@ -34,11 +35,25 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
 
   Future<void> sendMessage(String dest, String text) async {
     try {
+      // Optimistic update
+      final temp = ChatMessage(
+        id: "temp", 
+        sender: "Me", 
+        text: text, 
+        time: DateTime.now().millisecondsSinceEpoch ~/ 1000, 
+        isMe: true
+      );
+      state = [temp, ...state];
+      
       await api.sendMessage(destHex: dest, content: text);
-      await sync(); // Refresh list
+      await sync(); // Refresh with real ID from DB
     } catch (e) {
       debugPrint("Send Error: $e");
     }
+  }
+  
+  void deleteMessage(String id) {
+    state = state.where((m) => m.id != id).toList();
   }
 }
 

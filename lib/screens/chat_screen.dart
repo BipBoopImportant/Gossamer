@@ -1,90 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unicons/unicons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../state/store.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   final String ghostId;
   const ChatScreen({super.key, required this.ghostId});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _ctrl = TextEditingController();
-  final List<String> _localMsgs = ["Secure Connection Established.", "Handshake Verified.", "Beginning Transfer..."];
 
   @override
   Widget build(BuildContext context) {
+    // Filter messages for this thread (Simple filtering by sender name/ID)
+    // In a real app, we'd have thread IDs. Here we filter by 'isMe' or 'SenderName'
+    final allMessages = ref.watch(chatProvider);
+    final thread = allMessages.where((m) => m.sender == widget.ghostId || (m.isMe && widget.ghostId == "Ghost")).toList();
+
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // Dismiss keyboard on tap
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         backgroundColor: const Color(0xFF050507),
         appBar: AppBar(
           backgroundColor: const Color(0xFF15151F),
-          leading: IconButton(
-            icon: const Icon(UniconsLine.arrow_left),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Row(
-            children: [
-              Hero(
-                tag: "avatar_${widget.ghostId}",
-                child: const CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Color(0xFF050507),
-                  child: Icon(UniconsLine.lock, size: 14, color: Color(0xFF6C63FF)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("ENCRYPTED TUNNEL", style: TextStyle(fontSize: 10, color: Color(0xFF00F0FF), letterSpacing: 1)),
-                  Text(widget.ghostId, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ],
-          ),
+          leading: IconButton(icon: const Icon(UniconsLine.arrow_left), onPressed: () => Navigator.pop(context)),
+          title: Text(widget.ghostId, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         ),
         body: Column(
           children: [
             Expanded(
               child: ListView.builder(
+                reverse: true, // Build from bottom
                 padding: const EdgeInsets.all(20),
-                itemCount: _localMsgs.length,
+                itemCount: thread.length,
                 itemBuilder: (context, index) {
-                  final isMe = index % 2 != 0;
+                  final msg = thread[index];
                   return Align(
-                    alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                    alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       constraints: const BoxConstraints(maxWidth: 260),
                       decoration: BoxDecoration(
-                        color: isMe ? const Color(0xFF6C63FF) : const Color(0xFF1A1A24),
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(16),
-                          topRight: const Radius.circular(16),
-                          bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
-                          bottomRight: isMe ? Radius.zero : const Radius.circular(16),
-                        ),
+                        color: msg.isMe ? const Color(0xFF6C63FF) : const Color(0xFF1A1A24),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Text(_localMsgs[index], style: const TextStyle(color: Colors.white)),
+                      child: Text(msg.text, style: const TextStyle(color: Colors.white)),
                     ),
                   ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.2, end: 0);
                 },
               ),
             ),
-            
-            // Input Area with SafeArea to avoid Home Bar overlap
             Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF15151F),
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
-              ),
-              child: SafeArea( // FIX: Respect bottom gesture bar
+              decoration: BoxDecoration(color: const Color(0xFF15151F), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+              child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(
@@ -93,20 +68,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: TextField(
                           controller: _ctrl,
                           style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: "Type secure message...",
-                            hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                            fillColor: Colors.black,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            isDense: true, // Compact
-                          ),
+                          decoration: InputDecoration(hintText: "Secure Message...", fillColor: Colors.black, isDense: true),
                         ),
                       ),
                       const SizedBox(width: 12),
                       IconButton.filled(
                         onPressed: () {
                           if (_ctrl.text.isNotEmpty) {
-                            setState(() => _localMsgs.add(_ctrl.text));
+                            // Send to this specific Ghost ID (Requires Hex in real usage)
+                            // For this UI, we send to a dummy hex if ghostId isn't a hex
+                            String dest = widget.ghostId.length == 64 ? widget.ghostId : "0000000000000000000000000000000000000000000000000000000000000000";
+                            ref.read(chatProvider.notifier).sendMessage(dest, _ctrl.text);
                             _ctrl.clear();
                             HapticFeedback.lightImpact();
                           }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unicons/unicons.dart';
 import 'package:intl/intl.dart';
 import '../state/store.dart';
+import '../bridge_generated.dart'; // For ChatMessage type
 import 'chat_screen.dart';
 import 'nfc_screen.dart';
 
@@ -18,12 +19,18 @@ class InboxScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("ENCRYPTED INBOX"),
         actions: [
-          IconButton(icon: const Icon(UniconsLine.sync, color: Colors.white54), onPressed: () => ref.read(chatProvider.notifier).sync()),
-          IconButton(icon: const Icon(UniconsLine.user_plus, color: Color(0xFF00F0FF)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const NfcScreen(myIdentity: null)))),
+          IconButton(
+            icon: const Icon(UniconsLine.sync, color: Colors.white54),
+            onPressed: () => ref.read(chatProvider.notifier).sync()
+          ),
+          IconButton(
+            icon: const Icon(UniconsLine.user_plus, color: Color(0xFF00F0FF)),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const NfcScreen(myIdentity: null))),
+          )
         ],
       ),
       body: messages.isEmpty 
-        ? _buildEmptyState()
+        ? Center(child: Text("NO SIGNALS", style: TextStyle(color: Colors.white.withOpacity(0.5), letterSpacing: 2)))
         : ListView.builder(
             padding: const EdgeInsets.only(top: 10, left: 20, right: 20, bottom: 120),
             itemCount: messages.length,
@@ -35,16 +42,30 @@ class InboxScreen extends ConsumerWidget {
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: const Color(0xFF1A1A24).withOpacity(0.9), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A24).withOpacity(0.9), 
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.05))
+                  ),
                   child: Row(
                     children: [
-                      const CircleAvatar(radius: 24, backgroundColor: Color(0xFF15151F), child: Icon(UniconsLine.lock, color: Color(0xFF6C63FF), size: 20)),
+                      CircleAvatar(
+                        radius: 24, 
+                        backgroundColor: const Color(0xFF15151F), 
+                        child: Icon(UniconsLine.lock, color: msg.isMe ? Colors.grey : const Color(0xFF6C63FF), size: 20)
+                      ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(msg.sender, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(DateFormat('HH:mm').format(date), style: TextStyle(color: Colors.grey[600], fontSize: 12))]),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                              children: [
+                                Text(msg.isMe ? "Me" : "Ghost", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), 
+                                Text(DateFormat('HH:mm').format(date), style: TextStyle(color: Colors.grey[600], fontSize: 12))
+                              ]
+                            ),
                             const SizedBox(height: 4),
                             Text(msg.text, style: TextStyle(color: Colors.grey[400], fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                           ],
@@ -58,5 +79,4 @@ class InboxScreen extends ConsumerWidget {
           ),
     );
   }
-  Widget _buildEmptyState() => Center(child: Text("NO SIGNALS", style: TextStyle(color: Colors.white.withOpacity(0.5), letterSpacing: 2)));
 }
