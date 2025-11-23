@@ -1,7 +1,7 @@
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-use flutter_rust_bridge::StreamSink;
+// FIX: Removed unused StreamSink import
 use crate::core::{crypto, db, net, mesh};
 use tokio::runtime::Runtime;
 
@@ -46,13 +46,11 @@ pub fn ingest_mesh_packet(data: Vec<u8>) -> Result<()> {
     mesh::handle_incoming_bytes(&data, &path)
 }
 
-// NEW: Fetch a packet for multi-hop rotation
 pub fn get_transit_packet() -> Result<Vec<u8>> {
     let path = DB_PATH.lock().unwrap().clone();
     if let Ok(Some(packet)) = mesh::get_next_packet_to_broadcast(&path) {
         return Ok(packet);
     }
-    // Fallback: Return empty to signal "No transit data, broadcast default"
     Ok(Vec::new())
 }
 

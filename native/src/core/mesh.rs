@@ -35,8 +35,6 @@ pub fn handle_incoming_bytes(data: &[u8], db_path: &str) -> Result<()> {
             }
         }
 
-        // MULTI-HOP LOGIC:
-        // If it wasn't for me, save it to Transit so I can pass it to someone else.
         if !is_for_me {
             let _ = db.save_transit(data);
         }
@@ -51,7 +49,8 @@ pub fn generate_advertisement_packet(dest_root: &[u8], msg: &str) -> Result<Vec<
     let mb_short = u32::from_be_bytes([mb_bytes[0], mb_bytes[1], mb_bytes[2], mb_bytes[3]]);
     
     let mut nonce = [0u8; 24];
-    let ts_short = (now as u32);
+    // FIX: Removed parentheses around cast
+    let ts_short = now as u32;
     nonce[0..4].copy_from_slice(&ts_short.to_be_bytes());
     
     let (ct, _) = crypto::encrypt_with_fixed_nonce(dest_root, msg.as_bytes(), &nonce)?;
@@ -60,17 +59,12 @@ pub fn generate_advertisement_packet(dest_root: &[u8], msg: &str) -> Result<Vec<
     Ok(bincode::serialize(&packet)?)
 }
 
-// NEW: Pick a packet to broadcast (Either one of mine, or one I'm muling)
 pub fn get_next_packet_to_broadcast(db_path: &str) -> Result<Option<Vec<u8>>> {
     let db = db::Database::init(db_path.to_string())?;
-    
-    // 50% chance to re-broadcast a transit packet to help the network
-    // In a real app, prioritize own messages, but mix in transit packets.
     if rand::random::<bool>() {
         if let Ok(Some(transit)) = db.get_random_transit() {
             return Ok(Some(transit));
         }
     }
-    
-    Ok(None) // If None, UI should generate a heartbeat or default packet
+    Ok(None)
 }

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
+// FIX: Removed rand::seq::SliceRandom
 
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -57,7 +58,6 @@ impl Database {
     pub fn get_identity(&self) -> Result<Option<Vec<u8>>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT root_secret FROM identity WHERE key = 'main'")?;
-        // FIX: Added '?' to unwrap the query result before calling next()
         let mut rows = stmt.query([])?;
         if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
@@ -97,7 +97,6 @@ impl Database {
     pub fn get_random_transit(&self) -> Result<Option<Vec<u8>>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT packet FROM transit ORDER BY RANDOM() LIMIT 1")?;
-        // FIX: Added '?' here too
         let mut rows = stmt.query([])?;
         if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)

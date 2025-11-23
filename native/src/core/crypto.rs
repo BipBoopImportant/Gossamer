@@ -47,7 +47,13 @@ pub fn decrypt(root: &[u8], nonce: &[u8], data: &[u8]) -> Result<Vec<u8>> {
 
 pub fn get_ephemeral_signer() -> (KeyPair, XOnlyPublicKey) {
     let secp = Secp256k1::new();
-    // FIX: Correctly return the KeyPair and Public Key as a tuple
-    let (sk, pk) = secp.generate_keypair(&mut thread_rng());
-    (sk, pk)
+    let mut rng = thread_rng();
+    
+    // FIX: generate_keypair returns (SecretKey, PublicKey).
+    // We must explicitly convert this to a KeyPair for Schnorr signing.
+    let (secret_key, _) = secp.generate_keypair(&mut rng);
+    let keypair = KeyPair::from_secret_key(&secp, &secret_key);
+    let (xonly, _parity) = keypair.x_only_public_key();
+    
+    (keypair, xonly)
 }
