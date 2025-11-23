@@ -40,12 +40,31 @@ jobs:
         rustup target add armv7-linux-androideabi
         rustup target add x86_64-linux-android
 
+    # === THE FIX STARTS HERE ===
+    
+    # 1. Regenerate the Android project structure properly
+    - name: Repair Android Project
+      run: |
+        rm -rf android # Delete the broken local folder
+        flutter create . --platforms android --org com.gossamer
+
+    # 2. Re-inject permissions into the FRESH Manifest
+    - name: Inject Permissions
+      run: |
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>' android/app/src/main/AndroidManifest.xml
+        
+    # === THE FIX ENDS HERE ===
+
     - name: Get Dependencies
       run: flutter pub get
 
-    # Note: We skip the codegen step in the cloud because we mocked 
-    # the bridge_generated.dart in the setup script. 
-    # In a real scenario, you run codegen here.
+    # Generate the bridge code
+    - name: Generate Rust Bridge
+      run: |
+        flutter_rust_bridge_codegen \
+          --rust-input native/src/api.rs \
+          --dart-output lib/bridge_generated.dart \
+          --class-name Native
 
     - name: Build APK
       run: flutter build apk --release --no-tree-shake-icons
