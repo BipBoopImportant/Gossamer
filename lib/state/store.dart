@@ -1,13 +1,14 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../bridge_generated.dart';
+import 'dart:io' as io;
+import 'dart:ffi' as ffi;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'dart:ffi';
+import '../bridge_generated.dart';
 
-final api = NativeImpl(Platform.isIOS || Platform.isMacOS
-    ? DynamicLibrary.executable()
-    : DynamicLibrary.open('libnative.so'));
+// FIX: Setup FFI AFTER imports
+final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
+    ? ffi.DynamicLibrary.executable()
+    : ffi.DynamicLibrary.open('libnative.so'));
 
 class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   ChatNotifier() : super([]);
@@ -17,7 +18,9 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
       final dir = await getApplicationDocumentsDirectory();
       await api.initCore(appFilesDir: dir.path);
       await sync();
-    } catch (e) { debugPrint("Err: $e"); }
+    } catch (e) {
+      debugPrint("Init Error: $e");
+    }
   }
 
   Future<void> sync() async {
@@ -25,16 +28,26 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
       final msgs = await api.syncMessages();
       msgs.sort((a, b) => b.time.compareTo(a.time));
       state = msgs;
-    } catch (e) { debugPrint("Sync Err: $e"); }
+    } catch (e) {
+      debugPrint("Sync Error: $e");
+    }
   }
 
   Future<void> sendMessage(String dest, String text) async {
     try {
-      final temp = ChatMessage(id: "temp", sender: "Me", text: text, time: DateTime.now().millisecondsSinceEpoch ~/ 1000, isMe: true);
+      final temp = ChatMessage(
+        id: "temp", 
+        sender: "Me", 
+        text: text, 
+        time: DateTime.now().millisecondsSinceEpoch ~/ 1000, 
+        isMe: true
+      );
       state = [temp, ...state];
       await api.sendMessage(destHex: dest, content: text);
       await sync();
-    } catch (e) { debugPrint("Send Err: $e"); }
+    } catch (e) {
+      debugPrint("Send Error: $e");
+    }
   }
   
   void deleteMessage(String id) {
@@ -54,14 +67,11 @@ final identityProvider = FutureProvider<String>((ref) async {
   return api.getMyIdentity();
 });
 
-// NEW: Contacts Provider
 final contactsProvider = FutureProvider<List<Contact>>((ref) async {
-  // Trigger dependency on identity to ensure initCore is called
-  ref.watch(identityProvider);
+  ref.watch(identityProvider); // Dependency
   return api.getContacts();
 });
 
-// Helper to add contact
 final addContactProvider = Provider((ref) => (String key, String alias) async {
   await api.addContact(pubkey: key, alias: alias);
   ref.refresh(contactsProvider);
