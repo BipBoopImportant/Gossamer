@@ -102,3 +102,13 @@ impl Database {
         Ok(None)
     }
 }
+    // APPENDED FUNCTION
+    impl Database {
+        pub fn wipe_data(&self) -> Result<()> {
+            let conn = self.conn.lock().unwrap();
+            conn.execute("DELETE FROM messages", [])?;
+            conn.execute("DELETE FROM transit", [])?;
+            // We do NOT delete identity or contacts
+            Ok(())
+        }
+    }

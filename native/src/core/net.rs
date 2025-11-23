@@ -8,9 +8,26 @@ use base64::prelude::*;
 use secp256k1::{Secp256k1, Message as SecpMessage};
 use sha2::{Sha256, Digest};
 use rand;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
+
+// FIX: Global Mutable State for Relay URL
+lazy_static! {
+    static ref RELAY_URL: Mutex<String> = Mutex::new("wss://relay.damus.io".to_string());
+}
+
+pub fn set_relay(url: String) {
+    let mut r = RELAY_URL.lock().unwrap();
+    *r = url;
+}
+
+fn get_relay() -> String {
+    RELAY_URL.lock().unwrap().clone()
+}
 
 pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
-    let url = Url::parse("wss://relay.damus.io")?;
+    let url_str = get_relay();
+    let url = Url::parse(&url_str)?;
     let (mut ws, _) = connect_async(url).await?;
 
     let (ct, nonce) = crypto::encrypt(dest_root, msg.as_bytes())?;
@@ -32,7 +49,6 @@ pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
     let id = hasher.finalize();
     let id_hex = hex::encode(id);
 
-    // FIX: Use sign_schnorr_with_rng
     let secp = Secp256k1::new();
     let sig = secp.sign_schnorr_with_rng(&SecpMessage::from_slice(&id)?, &kp, &mut rand::thread_rng());
     let sig_hex = hex::encode(sig.as_ref());
@@ -56,7 +72,8 @@ pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
 }
 
 pub async fn check_relay(my_root: &[u8]) -> Result<Vec<String>> {
-    let url = Url::parse("wss://relay.damus.io")?;
+    let url_str = get_relay();
+    let url = Url::parse(&url_str)?;
     let (mut ws, _) = connect_async(url).await?;
 
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();

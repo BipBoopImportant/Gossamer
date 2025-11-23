@@ -1,7 +1,6 @@
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-// FIX: Removed unused StreamSink import
 use crate::core::{crypto, db, net, mesh};
 use tokio::runtime::Runtime;
 
@@ -25,6 +24,19 @@ pub fn get_my_identity() -> Result<String> {
     let db = db::Database::init(path)?;
     let id = db.get_identity()?.ok_or(anyhow::anyhow!("No Identity"))?;
     Ok(hex::encode(id))
+}
+
+// NEW: Settings Functions
+pub fn set_relay_url(url: String) -> Result<()> {
+    net::set_relay(url);
+    Ok(())
+}
+
+pub fn wipe_storage() -> Result<()> {
+    let path = DB_PATH.lock().unwrap().clone();
+    let db = db::Database::init(path)?;
+    db.wipe_data()?;
+    Ok(())
 }
 
 pub fn send_message(dest_hex: String, content: String) -> Result<()> {

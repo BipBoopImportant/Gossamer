@@ -16,14 +16,12 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
-    // Request Permissions
     if (await Permission.bluetooth.request().isDenied) return;
     if (await Permission.bluetoothScan.request().isDenied) return;
     if (await Permission.bluetoothAdvertise.request().isDenied) return;
     if (await Permission.bluetoothConnect.request().isDenied) return;
     if (await Permission.location.request().isDenied) return;
 
-    // V2 API: Check support
     final isSupported = await _peripheral.isSupported;
     if (isSupported) {
       startScanning();
@@ -51,6 +49,15 @@ class MeshController {
     );
   }
 
+  // FIX: New Stop Method
+  Future<void> stop() async {
+    _isScanning = false;
+    _rotationTimer?.cancel();
+    await FlutterBluePlus.stopScan();
+    await _peripheral.stop();
+    debugPrint("Mesh Stopped");
+  }
+
   void _startPacketRotation() {
     _rotationTimer?.cancel();
     _rotationTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
@@ -58,8 +65,6 @@ class MeshController {
         final packet = await api.getTransitPacket();
         if (packet.isNotEmpty) {
           await _peripheral.stop(); 
-          
-          // V2 API: AdvertiseData
           final AdvertiseData data = AdvertiseData(
             manufacturerId: 0xFFFF,
             manufacturerData: Uint8List.fromList(packet),
@@ -67,30 +72,22 @@ class MeshController {
           );
           await _peripheral.start(advertiseData: data);
         }
-      } catch (e) {
-        debugPrint("Rotation Error: $e");
-      }
+      } catch (e) { debugPrint("Rotation Error: $e"); }
     });
   }
 
   Future<void> broadcastMessage(String destHex, String content) async {
     try {
       final packet = await api.prepareMeshPacket(destHex: destHex, content: content);
-      
       await _peripheral.stop();
-      
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
         manufacturerData: Uint8List.fromList(packet),
         includeDeviceName: false,
       );
-      
       await _peripheral.start(advertiseData: data);
       await Future.delayed(const Duration(seconds: 15));
       await _peripheral.stop();
-      
-    } catch (e) {
-      debugPrint("Broadcast Error: $e");
-    }
+    } catch (e) { debugPrint("Broadcast Error: $e"); }
   }
 }

@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unicons/unicons.dart';
+import '../state/store.dart'; // Access providers
+import '../services/mesh_controller.dart'; // Access Mesh
 
-class SettingsSheet extends StatefulWidget {
+class SettingsSheet extends ConsumerStatefulWidget {
   const SettingsSheet({super.key});
-
   @override
-  State<SettingsSheet> createState() => _SettingsSheetState();
+  ConsumerState<SettingsSheet> createState() => _SettingsSheetState();
 }
 
-class _SettingsSheetState extends State<SettingsSheet> {
+class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   String _relayUrl = "wss://relay.damus.io";
   bool _isConnected = true;
 
   @override
   Widget build(BuildContext context) {
+    // Access Real Identity from Rust
+    final identityAsync = ref.watch(identityProvider);
+
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF15151F),
@@ -30,31 +35,32 @@ class _SettingsSheetState extends State<SettingsSheet> {
           const Text("CONFIGURATION", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, letterSpacing: 2)),
           const SizedBox(height: 20),
           
-          // 1. Export Identity
+          // 1. Export Identity (REAL DATA)
           _buildTile(
             icon: UniconsLine.key_skeleton, 
             title: "Identity Backup", 
             subtitle: "Export root secret",
-            onTap: _showExportDialog
+            onTap: () {
+              identityAsync.whenData((key) => _showExportDialog(key));
+            }
           ),
           
-          // 2. Manage Storage
+          // 2. Manage Storage (REAL WIPE)
           _buildTile(
             icon: UniconsLine.database, 
             title: "Storage", 
-            subtitle: "12.4 MB Cached",
+            subtitle: "Local Encrypted DB",
             onTap: _showStorageDialog
           ),
           
-          // 3. Relay Settings
+          // 3. Relay Settings (REAL SWITCH)
           _buildTile(
             icon: UniconsLine.server_network, 
             title: "Relay", 
-            subtitle: _isConnected ? _relayUrl : "Disconnected",
+            subtitle: _relayUrl,
             onTap: _showRelayDialog
           ),
           
-          // 4. Encryption Info (Static)
           _buildTile(
             icon: UniconsLine.shield, 
             title: "Encryption", 
@@ -64,14 +70,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
           
           const SizedBox(height: 20),
           
-          // 5. Disconnect Button
+          // 4. Disconnect (REAL STOP)
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () {
+              onPressed: () async {
+                if (_isConnected) {
+                  // Stop Mesh & Relay
+                  await MeshController().stop();
+                  // In a real app, we'd also disconnect WS, but changing URL handles that mostly
+                } else {
+                  await MeshController().init();
+                }
                 setState(() => _isConnected = !_isConnected);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isConnected ? "Mesh Reconnected" : "Mesh Disconnected")));
+                if(context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isConnected ? "Mesh Reconnected" : "Mesh Disconnected")));
+                }
               },
               icon: Icon(UniconsLine.power, color: _isConnected ? Colors.red : Colors.green),
               label: Text(_isConnected ? "DISCONNECT MESH" : "CONNECT MESH", style: TextStyle(color: _isConnected ? Colors.red : Colors.green)),
@@ -91,21 +106,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: Colors.white70),
-            ),
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: Colors.white70)),
             const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)),
-                  Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
-                ],
-              ),
-            ),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)), Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13))])),
             const Icon(UniconsLine.angle_right, color: Colors.white24),
           ],
         ),
@@ -113,9 +116,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     );
   }
 
-  // --- DIALOGS ---
-
-  void _showExportDialog() {
+  void _showExportDialog(String key) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -129,7 +130,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
-              child: const Text("a1b2c3d4e5f67890...", style: TextStyle(color: Colors.white, fontFamily: 'monospace')),
+              child: Text(key, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
             ),
           ],
         ),
@@ -137,7 +138,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CLOSE")),
           TextButton(
             onPressed: () {
-              Clipboard.setData(const ClipboardData(text: "a1b2c3d4e5f67890..."));
+              Clipboard.setData(ClipboardData(text: key));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Secret copied to clipboard")));
             }, 
@@ -154,15 +155,19 @@ class _SettingsSheetState extends State<SettingsSheet> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A24),
         title: const Text("MANAGE STORAGE", style: TextStyle(color: Colors.white)),
-        content: const Text("Clear local message cache? Keys will be preserved.", style: TextStyle(color: Colors.white70)),
+        content: const Text("Wipe all messages? Identity will be kept.", style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Storage Cleared (12.4 MB freed)")));
+            onPressed: () async {
+              await api.wipeStorage(); // REAL CALL
+              ref.refresh(chatProvider); // Reload UI
+              if(context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Storage Wiped")));
+              }
             }, 
-            child: const Text("CLEAR", style: TextStyle(color: Colors.red))
+            child: const Text("WIPE", style: TextStyle(color: Colors.red))
           ),
         ],
       ),
@@ -184,9 +189,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              await api.setRelayUrl(url: ctrl.text); // REAL CALL
               setState(() => _relayUrl = ctrl.text);
-              Navigator.pop(context);
+              if(context.mounted) Navigator.pop(context);
             }, 
             child: const Text("SAVE")
           ),
