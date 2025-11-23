@@ -48,14 +48,13 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX 1: Force MinSDK to 21 (Required for Camera/NFC) ===
+    # === FIX: Use regex to replace the ENTIRE line ===
     - name: Set MinSDK Version
       run: |
-        sed -i 's/minSdkVersion [0-9]*/minSdkVersion 21/' android/app/build.gradle
-        sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 34/' android/app/build.gradle
-        sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 34/' android/app/build.gradle
+        sed -i 's/minSdkVersion.*/minSdkVersion 21/' android/app/build.gradle
+        sed -i 's/compileSdkVersion.*/compileSdkVersion 34/' android/app/build.gradle
+        sed -i 's/targetSdkVersion.*/targetSdkVersion 34/' android/app/build.gradle
 
-    # === FIX 2: Kotlin Conflict Resolution ===
     - name: Fix Kotlin Conflict
       run: |
         cat >> android/app/build.gradle <<GRADLE_FIX
