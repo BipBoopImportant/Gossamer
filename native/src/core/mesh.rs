@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::core::{crypto, db};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use rand; // FIX: Added missing import for rand::random
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BlePacket {
@@ -23,7 +24,8 @@ pub fn handle_incoming_bytes(data: &[u8], db_path: &str) -> Result<()> {
                     let my_short = u32::from_be_bytes([mb_bytes[0], mb_bytes[1], mb_bytes[2], mb_bytes[3]]);
                     if my_short == packet.mb_short {
                         let mut nonce = [0u8; 24];
-                        nonce[0..4].copy_from_slice(&packet.ts_short.to_be_bytes());
+                        let ts_short = packet.ts_short;
+                        nonce[0..4].copy_from_slice(&ts_short.to_be_bytes());
                         if let Ok(plain) = crypto::decrypt(&my_root, &nonce, &packet.ct) {
                             let text = String::from_utf8_lossy(&plain).to_string();
                             db.save_message(&uuid::Uuid::new_v4().to_string(), "Mesh Peer", &text, false)?;
@@ -49,7 +51,6 @@ pub fn generate_advertisement_packet(dest_root: &[u8], msg: &str) -> Result<Vec<
     let mb_short = u32::from_be_bytes([mb_bytes[0], mb_bytes[1], mb_bytes[2], mb_bytes[3]]);
     
     let mut nonce = [0u8; 24];
-    // FIX: Removed parentheses around cast
     let ts_short = now as u32;
     nonce[0..4].copy_from_slice(&ts_short.to_be_bytes());
     
