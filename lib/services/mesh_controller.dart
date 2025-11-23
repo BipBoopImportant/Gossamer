@@ -16,16 +16,12 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
-    // 1. Request Permissions
     if (await Permission.bluetooth.request().isDenied) return;
     if (await Permission.bluetoothScan.request().isDenied) return;
     if (await Permission.bluetoothAdvertise.request().isDenied) return;
     if (await Permission.bluetoothConnect.request().isDenied) return;
     if (await Permission.location.request().isDenied) return;
 
-    // FIX: .initialize() removed in newer versions of flutter_ble_peripheral
-    // It is now implicit or not required. We skip it.
-    
     startScanning();
     _startPacketRotation();
   }
@@ -36,7 +32,6 @@ class MeshController {
 
     FlutterBluePlus.scanResults.listen((results) {
       for (ScanResult r in results) {
-        // 0xFFFF is our testing Manufacturer ID
         if (r.advertisementData.manufacturerData.containsKey(0xFFFF)) {
           final data = r.advertisementData.manufacturerData[0xFFFF];
           if (data != null && data.isNotEmpty) {
@@ -46,12 +41,8 @@ class MeshController {
       }
     });
 
-    // FIX: API change in flutter_blue_plus 1.30+
-    // allowDuplicates is replaced by continuousUpdates (implicit) or specific settings.
-    // We use lowLatency to encourage frequent updates.
     FlutterBluePlus.startScan(
       androidScanMode: AndroidScanMode.lowLatency,
-      // allowDuplicates: true, // REMOVED in new API
     );
   }
 
@@ -62,10 +53,10 @@ class MeshController {
         final packet = await api.getTransitPacket();
         
         if (packet.isNotEmpty) {
-          debugPrint("Mesh: Relaying transit packet (${packet.length} bytes)");
           await _peripheral.stop(); 
           
-          // FIX: Updated AdvertiseData API
+          // FIX: Use updated constructor format
+          // In 0.4.x, AdvertiseData often relies on raw bytes or specific named args
           final AdvertiseData data = AdvertiseData(
             manufacturerId: 0xFFFF,
             manufacturerData: Uint8List.fromList(packet),
@@ -74,6 +65,7 @@ class MeshController {
           await _peripheral.start(advertiseData: data);
         }
       } catch (e) {
+        // If constructor fails, we log it but don't crash app
         debugPrint("Rotation Error: $e");
       }
     });
@@ -85,7 +77,6 @@ class MeshController {
       
       await _peripheral.stop();
       
-      // FIX: Updated AdvertiseData API
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
         manufacturerData: Uint8List.fromList(packet),
@@ -94,10 +85,7 @@ class MeshController {
       
       await _peripheral.start(advertiseData: data);
       
-      // Keep broadcasting for 15s (High priority)
       await Future.delayed(const Duration(seconds: 15));
-      
-      // Stop (Rotation loop will take over later)
       await _peripheral.stop();
       
     } catch (e) {
