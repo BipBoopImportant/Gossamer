@@ -48,7 +48,23 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === CRITICAL FIX: Re-add ALL dependencies including FFI ===
+    # === FIX: Inject Kotlin Dependency Resolution Strategy ===
+    # This forces all modules to use the same standard library, preventing duplicates.
+    - name: Fix Kotlin Conflict
+      run: |
+        cat >> android/app/build.gradle <<GRADLE_FIX
+        
+        configurations.all {
+            resolutionStrategy {
+                eachDependency { details ->
+                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                        details.useVersion '1.8.0'
+                    }
+                }
+            }
+        }
+        GRADLE_FIX
+
     - name: Restore Dependencies
       run: |
         flutter pub add ffi:^2.1.0
