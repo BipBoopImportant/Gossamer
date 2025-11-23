@@ -22,8 +22,15 @@ class MeshController {
     if (await Permission.bluetoothConnect.request().isDenied) return;
     if (await Permission.location.request().isDenied) return;
 
-    startScanning();
-    _startPacketRotation();
+    // In 0.6.3, we don't need explicit initialize(), 
+    // but we check if supported for safety.
+    final isSupported = await _peripheral.isSupported;
+    if (isSupported) {
+      startScanning();
+      _startPacketRotation();
+    } else {
+      debugPrint("BLE Advertising not supported on this device");
+    }
   }
 
   void startScanning() {
@@ -55,17 +62,16 @@ class MeshController {
         if (packet.isNotEmpty) {
           await _peripheral.stop(); 
           
-          // FIX: Use updated constructor format
-          // In 0.4.x, AdvertiseData often relies on raw bytes or specific named args
+          // FIX: In 0.6.3, ManufacturerData is passed as a list of ints
+          // and includeDeviceName is a boolean.
           final AdvertiseData data = AdvertiseData(
             manufacturerId: 0xFFFF,
-            manufacturerData: Uint8List.fromList(packet),
+            manufacturerData: packet, // List<int> matches Uint8List
             includeDeviceName: false,
           );
           await _peripheral.start(advertiseData: data);
         }
       } catch (e) {
-        // If constructor fails, we log it but don't crash app
         debugPrint("Rotation Error: $e");
       }
     });
@@ -79,12 +85,11 @@ class MeshController {
       
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
-        manufacturerData: Uint8List.fromList(packet),
+        manufacturerData: packet,
         includeDeviceName: false,
       );
       
       await _peripheral.start(advertiseData: data);
-      
       await Future.delayed(const Duration(seconds: 15));
       await _peripheral.stop();
       

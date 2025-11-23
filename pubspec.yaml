@@ -18,8 +18,8 @@ dependencies:
   
   # Hardware
   flutter_blue_plus: ^1.31.0
-  # FIX: Bump to 0.5.0 for consistent API
-  flutter_ble_peripheral: ^0.5.0 
+  # FIX: Lock to 0.6.3 where AdvertiseData API is stable
+  flutter_ble_peripheral: ^0.6.3 
   permission_handler: ^11.0.0
   nfc_manager: ^3.3.0
   share_plus: ^7.0.0
