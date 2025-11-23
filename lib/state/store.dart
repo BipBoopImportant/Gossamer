@@ -1,14 +1,14 @@
-import 'dart:io' as io;
-import 'dart:ffi' as ffi;
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import '../bridge_generated.dart';
-import '../services/mesh_controller.dart'; // Import Controller
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:ffi';
+import '../services/mesh_controller.dart';
 
-final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
-    ? ffi.DynamicLibrary.executable()
-    : ffi.DynamicLibrary.open('libnative.so'));
+final api = NativeImpl(Platform.isIOS || Platform.isMacOS
+    ? DynamicLibrary.executable()
+    : DynamicLibrary.open('libnative.so'));
 
 class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   ChatNotifier() : super([]);
@@ -17,11 +17,9 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       final dir = await getApplicationDocumentsDirectory();
       await api.initCore(appFilesDir: dir.path);
-      await sync();
-      
-      // START MESH
+      // Init Mesh Controller
       await MeshController().init();
-      
+      await sync();
     } catch (e) {
       debugPrint("Init Error: $e");
     }
@@ -30,6 +28,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   Future<void> sync() async {
     try {
       final msgs = await api.syncMessages();
+      // Sort Descending (Newest First)
       msgs.sort((a, b) => b.time.compareTo(a.time));
       state = msgs;
     } catch (e) {
@@ -39,14 +38,23 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
 
   Future<void> sendMessage(String dest, String text) async {
     try {
-      // 1. Send via Internet Relay
-      await api.sendMessage(destHex: dest, content: text);
+      // 1. Optimistic Update (Show it immediately)
+      final temp = ChatMessage(
+        id: "temp_${DateTime.now().millisecondsSinceEpoch}", 
+        sender: "Me", 
+        text: text, 
+        time: DateTime.now().millisecondsSinceEpoch ~/ 1000, 
+        isMe: true
+      );
+      state = [temp, ...state];
+
+      // 2. Send to Network (Background)
+      // We intentionally don't await these fully to keep UI snappy
+      api.sendMessage(destHex: dest, content: text).then((_) => sync());
       
-      // 2. Send via Bluetooth Mesh
-      await MeshController().broadcastMessage(dest, text);
+      // 3. Send to Mesh
+      MeshController().broadcastMessage(dest, text);
       
-      // 3. Update UI
-      await sync();
     } catch (e) {
       debugPrint("Send Error: $e");
     }
