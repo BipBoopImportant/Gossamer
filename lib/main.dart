@@ -5,15 +5,12 @@ import 'screens/home_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Force full transparency on Android System Bars
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.light,
-    systemNavigationBarDividerColor: Colors.transparent,
   ));
 
   runApp(const GossamerApp());

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:unicons/unicons.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'radar_screen.dart';
 import 'inbox_screen.dart';
+import 'identity_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -16,28 +16,30 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // FIX: extendBody allows the background to draw behind the floating nav bar
-      extendBody: true, 
-      
-      body: _index == 0 ? const RadarScreen() : const InboxScreen(),
-      
+      extendBody: true,
+      body: IndexedStack(
+        index: _index,
+        children: const [
+          RadarScreen(),
+          InboxScreen(),
+          IdentityScreen(),
+        ],
+      ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.only(left: 20, right: 20, bottom: 30), // Raised from bottom
-        height: 80,
+        margin: const EdgeInsets.only(left: 20, right: 20, bottom: 30),
+        height: 70,
         decoration: BoxDecoration(
-          // Blur effect for true glassmorphism
-          color: const Color(0xFF15151F).withOpacity(0.8),
-          borderRadius: BorderRadius.circular(40),
+          color: const Color(0xFF15151F).withOpacity(0.9),
+          borderRadius: BorderRadius.circular(35),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 10))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 10))],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildNavItem(UniconsLine.rss_interface, "RADAR", 0),
             _buildNavItem(UniconsLine.envelope_alt, "INBOX", 1),
+            _buildNavItem(UniconsLine.user_circle, "ME", 2),
           ],
         ),
       ),
@@ -49,18 +51,18 @@ class _HomeShellState extends State<HomeShell> {
     return GestureDetector(
       onTap: () => setState(() => _index = index),
       child: AnimatedContainer(
-        duration: 300.ms,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          color: isSelected ? const Color(0xFF6C63FF).withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? const Color(0xFF6C63FF) : Colors.grey),
+            Icon(icon, color: isSelected ? const Color(0xFF6C63FF) : Colors.grey, size: 20),
             if (isSelected) ...[
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6C63FF)))
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6C63FF), fontSize: 12))
             ]
           ],
         ),
