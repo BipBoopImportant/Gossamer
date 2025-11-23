@@ -31,7 +31,10 @@ jobs:
         target: aarch64-linux-android
         override: true
 
-    # === FIX: Pin specific version to 1.82.6 (Last v1 release) ===
+    # === FIX: Install cargo-expand ===
+    - name: Install Cargo Expand
+      run: cargo install cargo-expand
+
     - name: Install Bridge Codegen
       run: cargo install flutter_rust_bridge_codegen --version 1.82.6
 
