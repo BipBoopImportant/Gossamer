@@ -34,3 +34,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  mobile_scanner: ^3.5.5

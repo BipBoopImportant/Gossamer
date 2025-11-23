@@ -29,7 +29,6 @@ pub fn send_message(dest_hex: String, content: String) -> Result<()> {
     let dest_bytes = hex::decode(dest_hex)?;
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(net::send_to_relay(&dest_bytes, &content))?;
-    
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
     db.save_message(&uuid::Uuid::new_v4().to_string(), "Me", &content, true)?;
@@ -39,7 +38,6 @@ pub fn send_message(dest_hex: String, content: String) -> Result<()> {
 pub fn sync_messages() -> Result<Vec<ChatMessage>> {
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
-    
     if let Ok(Some(my_id)) = db.get_identity() {
         let rt = tokio::runtime::Runtime::new()?;
         if let Ok(new_msgs) = rt.block_on(net::check_relay(&my_id)) {
@@ -48,11 +46,28 @@ pub fn sync_messages() -> Result<Vec<ChatMessage>> {
             }
         }
     }
-
     let rows = db.get_messages()?;
     let mut result = Vec::new();
     for (id, sender, text, time, is_me) in rows {
         result.push(ChatMessage { id, sender, text, time, is_me });
+    }
+    Ok(result)
+}
+
+pub fn add_contact(pubkey: String, alias: String) -> Result<()> {
+    let path = DB_PATH.lock().unwrap().clone();
+    let db = db::Database::init(path)?;
+    db.add_contact(&pubkey, &alias)?;
+    Ok(())
+}
+
+pub fn get_contacts() -> Result<Vec<Contact>> {
+    let path = DB_PATH.lock().unwrap().clone();
+    let db = db::Database::init(path)?;
+    let rows = db.get_contacts()?;
+    let mut result = Vec::new();
+    for (pubkey, alias) in rows {
+        result.push(Contact { pubkey, alias });
     }
     Ok(result)
 }
@@ -63,4 +78,9 @@ pub struct ChatMessage {
     pub text: String,
     pub time: u64,
     pub is_me: bool,
+}
+
+pub struct Contact {
+    pub pubkey: String,
+    pub alias: String,
 }

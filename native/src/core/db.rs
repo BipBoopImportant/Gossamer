@@ -10,10 +10,6 @@ impl Database {
     pub fn init(path: String) -> Result<Self> {
         let conn = Connection::open(path)?;
         
-        // In production, use SQLCipher PRAGMA key here.
-        // For this specific build script, we use standard SQLite to avoid linker issues on some cloud runners
-        // if the C-lib isn't perfect. Logic remains identical.
-        
         conn.execute("CREATE TABLE IF NOT EXISTS messages (
             id TEXT PRIMARY KEY,
             sender TEXT NOT NULL,
@@ -25,6 +21,12 @@ impl Database {
         conn.execute("CREATE TABLE IF NOT EXISTS identity (
             key TEXT PRIMARY KEY,
             root_secret BLOB
+        )", [])?;
+
+        // NEW: Contacts Table
+        conn.execute("CREATE TABLE IF NOT EXISTS contacts (
+            pubkey TEXT PRIMARY KEY,
+            alias TEXT NOT NULL
         )", [])?;
 
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
@@ -42,13 +44,10 @@ impl Database {
 
     pub fn get_messages(&self) -> Result<Vec<(String, String, String, u64, bool)>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp ASC")?;
+        let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp ASC LIMIT 500")?;
         let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?
-            ))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
         })?;
-        
         let mut res = Vec::new();
         for r in rows { res.push(r?); }
         Ok(res)
@@ -58,9 +57,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT root_secret FROM identity WHERE key = 'main'")?;
         let mut rows = stmt.query([]);
-        if let Ok(Some(row)) = rows.next() {
-            return Ok(Some(row.get(0)?));
-        }
+        if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
     }
 
@@ -68,5 +65,21 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.execute("INSERT OR REPLACE INTO identity (key, root_secret) VALUES ('main', ?1)", params![secret])?;
         Ok(())
+    }
+
+    // NEW: Contact Methods
+    pub fn add_contact(&self, pubkey: &str, alias: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("INSERT OR REPLACE INTO contacts (pubkey, alias) VALUES (?1, ?2)", params![pubkey, alias])?;
+        Ok(())
+    }
+
+    pub fn get_contacts(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT pubkey, alias FROM contacts ORDER BY alias ASC")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut res = Vec::new();
+        for r in rows { res.push(r?); }
+        Ok(res)
     }
 }
