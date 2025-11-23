@@ -28,3 +28,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  share_plus: ^7.0.0

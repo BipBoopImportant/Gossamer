@@ -11,27 +11,19 @@ class SettingsSheet extends StatelessWidget {
         color: Color(0xFF15151F),
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24, borderRadius: BorderRadius.circular(2)
-              )
-            )
-          ),
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 24),
           const Text("CONFIGURATION", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, letterSpacing: 2)),
           const SizedBox(height: 20),
-          
-          _buildTile(UniconsLine.key_skeleton, "Export Identity Keys", "Backup your root secret"),
-          _buildTile(UniconsLine.database, "Manage Storage", "Prune local database (12MB)"),
-          _buildTile(UniconsLine.server_network, "Relay Settings", "Connected to: damus.io"),
-          
+          _buildTile(UniconsLine.key_skeleton, "Identity Backup", "Export root secret"),
+          _buildTile(UniconsLine.database, "Storage", "12.4 MB Cached"),
+          _buildTile(UniconsLine.server_network, "Relay", "wss://damus.io (Connected)"),
+          _buildTile(UniconsLine.shield, "Encryption", "XChaCha20-Poly1305"),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -39,13 +31,9 @@ class SettingsSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
               icon: const Icon(UniconsLine.power, color: Colors.red),
               label: const Text("DISCONNECT MESH", style: TextStyle(color: Colors.red)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
-                padding: const EdgeInsets.all(16)
-              ),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red), padding: const EdgeInsets.all(16)),
             ),
           ),
-          const SizedBox(height: 20),
         ],
       ),
     );
@@ -58,10 +46,7 @@ class SettingsSheet extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12)
-            ),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: Colors.white70),
           ),
           const SizedBox(width: 16),

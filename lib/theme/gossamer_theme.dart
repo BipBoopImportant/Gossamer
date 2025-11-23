@@ -14,17 +14,21 @@ class GossamerTheme {
       surface: const Color(0xFF15151F),
       background: const Color(0xFF050507),
     ),
-    textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
+    textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+    ),
     scaffoldBackgroundColor: const Color(0xFF050507),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
+      titleTextStyle: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2, fontSize: 16),
     ),
-    // Sexy Input Fields
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: const Color(0xFF1A1A24),
+      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,

@@ -12,17 +12,11 @@ class InboxScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final messages = ref.watch(chatProvider);
     
-    // Group by sender (Simple logic: just show unique threads or latest message)
-    // For this UI demo, we treat every message in the store as a thread preview.
-    
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text("ENCRYPTED INBOX", style: TextStyle(letterSpacing: 2, fontSize: 16, fontWeight: FontWeight.bold)),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text("ENCRYPTED INBOX")),
       body: messages.isEmpty 
-        ? Center(child: Text("No Signals Detected", style: TextStyle(color: Colors.white.withOpacity(0.3), letterSpacing: 1)))
+        ? _buildEmptyState()
         : ListView.builder(
             padding: const EdgeInsets.only(top: 10, left: 20, right: 20, bottom: 120),
             itemCount: messages.length,
@@ -34,8 +28,9 @@ class InboxScreen extends ConsumerWidget {
                 onDismissed: (_) => ref.read(chatProvider.notifier).deleteMessage(msg.id),
                 background: Container(
                   alignment: Alignment.centerRight,
+                  margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.only(right: 20),
-                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(24)),
+                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
                   child: const Icon(UniconsLine.trash_alt, color: Colors.red),
                 ),
                 child: GestureDetector(
@@ -44,19 +39,16 @@ class InboxScreen extends ConsumerWidget {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A24).withOpacity(0.8),
+                      color: const Color(0xFF1A1A24).withOpacity(0.9),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white.withOpacity(0.05)),
                     ),
                     child: Row(
                       children: [
-                        Hero(
-                          tag: "avatar_${msg.sender}",
-                          child: CircleAvatar(
-                            radius: 24,
-                            backgroundColor: const Color(0xFF15151F),
-                            child: const Icon(UniconsLine.lock, color: Color(0xFF6C63FF), size: 20),
-                          ),
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: const Color(0xFF15151F),
+                          child: const Icon(UniconsLine.lock, color: Color(0xFF6C63FF), size: 20),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -90,6 +82,21 @@ class InboxScreen extends ConsumerWidget {
               );
             },
           ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(UniconsLine.wind, size: 80, color: Colors.white.withOpacity(0.1)),
+          const SizedBox(height: 16),
+          Text("NO SIGNALS DETECTED", style: TextStyle(color: Colors.white.withOpacity(0.5), letterSpacing: 2, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text("The airwaves are silent.", style: TextStyle(color: Colors.white.withOpacity(0.3))),
+        ],
+      ),
     );
   }
 }
