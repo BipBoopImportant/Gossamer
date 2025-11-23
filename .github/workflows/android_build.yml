@@ -48,17 +48,38 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Use precise replacement to avoid syntax errors ===
-    - name: Set MinSDK Version
+    # === CRITICAL FIX: Force ALL plugins to use SDK 34 ===
+    # We append a block to the ROOT build.gradle that iterates over all subprojects
+    # (including plugins) and forces the correct SDK versions.
+    - name: Apply Global Gradle Configuration
       run: |
-        # We replace the variable reference with the integer literal
-        sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
-        sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
-        sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' android/app/build.gradle
+        cat >> android/build.gradle <<GRADLE_GLOBAL_FIX
+        
+        subprojects {
+            afterEvaluate { project ->
+                if (project.hasProperty("android")) {
+                    android {
+                        compileSdkVersion 34
+                        defaultConfig {
+                            minSdkVersion 21
+                            targetSdkVersion 34
+                        }
+                        // Fix namespace issues for newer AGP versions
+                        if (project.hasProperty("android") && project.android.hasProperty("namespace")) {
+                            if (project.android.namespace == null) {
+                                project.android.namespace = project.group
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        GRADLE_GLOBAL_FIX
 
-    - name: Fix Kotlin Conflict
+    # Fix Kotlin Version Conflict
+    - name: Fix Kotlin Version
       run: |
-        cat >> android/app/build.gradle <<GRADLE_FIX
+        cat >> android/app/build.gradle <<GRADLE_KOTLIN_FIX
         configurations.all {
             resolutionStrategy {
                 eachDependency { details ->
@@ -68,7 +89,7 @@ jobs:
                 }
             }
         }
-        GRADLE_FIX
+        GRADLE_KOTLIN_FIX
 
     - name: Restore Dependencies
       run: |
