@@ -48,13 +48,12 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === CRITICAL FIX: Force ALL plugins to use SDK 34 ===
-    # We append a block to the ROOT build.gradle that iterates over all subprojects
-    # (including plugins) and forces the correct SDK versions.
+    # === FIX: Inject Configuration at the TOP of build.gradle ===
+    # We create a temporary file with our config, cat the original build.gradle to it,
+    # and then overwrite the original. This ensures our block runs first.
     - name: Apply Global Gradle Configuration
       run: |
-        cat >> android/build.gradle <<GRADLE_GLOBAL_FIX
-        
+        cat > gradle_fix.txt <<GRADLE_GLOBAL_FIX
         subprojects {
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
@@ -64,7 +63,6 @@ jobs:
                             minSdkVersion 21
                             targetSdkVersion 34
                         }
-                        // Fix namespace issues for newer AGP versions
                         if (project.hasProperty("android") && project.android.hasProperty("namespace")) {
                             if (project.android.namespace == null) {
                                 project.android.namespace = project.group
@@ -75,6 +73,9 @@ jobs:
             }
         }
         GRADLE_GLOBAL_FIX
+        
+        cat android/build.gradle >> gradle_fix.txt
+        mv gradle_fix.txt android/build.gradle
 
     # Fix Kotlin Version Conflict
     - name: Fix Kotlin Version
