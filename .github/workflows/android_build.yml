@@ -48,6 +48,14 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
+    # === FIX 1: Force MinSDK to 21 (Required for Camera/NFC) ===
+    - name: Set MinSDK Version
+      run: |
+        sed -i 's/minSdkVersion [0-9]*/minSdkVersion 21/' android/app/build.gradle
+        sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 34/' android/app/build.gradle
+        sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 34/' android/app/build.gradle
+
+    # === FIX 2: Kotlin Conflict Resolution ===
     - name: Fix Kotlin Conflict
       run: |
         cat >> android/app/build.gradle <<GRADLE_FIX
@@ -79,7 +87,6 @@ jobs:
         flutter pub add uuid:^3.0.7
         flutter pub add path_provider:^2.0.15
         
-    # Inject Permissions including Camera for QR
     - name: Inject Permissions
       run: |
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" />' android/app/src/main/AndroidManifest.xml
