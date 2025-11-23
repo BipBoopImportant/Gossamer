@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // FIX: Added this import
 import 'package:unicons/unicons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -100,7 +101,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (_ctrl.text.isNotEmpty) {
                       setState(() => _localMsgs.add(_ctrl.text));
                       _ctrl.clear();
-                      HapticFeedback.lightImpact();
+                      HapticFeedback.lightImpact(); // Now this works
                     }
                   },
                   style: IconButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
