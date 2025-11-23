@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Needed for SystemChrome
+import 'package:flutter/services.dart';
 import 'theme/gossamer_theme.dart';
 import 'screens/home_shell.dart';
 
 void main() {
-  // 1. Initialize binding so we can talk to the OS before running the app
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Make System Bars Transparent (Edge-to-Edge)
+  // Force full transparency on Android System Bars
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light, // White icons for Dark BG
+    statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.light,
     systemNavigationBarDividerColor: Colors.transparent,
