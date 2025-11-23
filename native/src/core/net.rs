@@ -7,20 +7,16 @@ use url::Url;
 use base64::prelude::*;
 use secp256k1::{Secp256k1, Message as SecpMessage};
 use sha2::{Sha256, Digest};
-
-// In Rustls mode, connect_async automatically uses the bundled certs.
-// No code change needed here, but we rewrite to ensure clean state.
+use rand;
 
 pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
     let url = Url::parse("wss://relay.damus.io")?;
     let (mut ws, _) = connect_async(url).await?;
 
-    // 1. Encrypt
     let (ct, nonce) = crypto::encrypt(dest_root, msg.as_bytes())?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
     let mailbox = crypto::generate_mailbox(dest_root, now);
 
-    // 2. Construct Content
     let content = json!({
         "p": BASE64_STANDARD.encode(&ct),
         "n": BASE64_STANDARD.encode(&nonce)
@@ -36,8 +32,9 @@ pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
     let id = hasher.finalize();
     let id_hex = hex::encode(id);
 
+    // FIX: Use sign_schnorr_with_rng
     let secp = Secp256k1::new();
-    let sig = secp.sign_schnorr(&SecpMessage::from_slice(&id)?, &kp);
+    let sig = secp.sign_schnorr_with_rng(&SecpMessage::from_slice(&id)?, &kp, &mut rand::thread_rng());
     let sig_hex = hex::encode(sig.as_ref());
 
     let final_msg = json!([
@@ -53,7 +50,6 @@ pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
     ]);
 
     ws.send(Message::Text(final_msg.to_string())).await?;
-    // Small delay to ensure transmit
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     ws.close(None).await?;
     Ok(())
@@ -66,7 +62,6 @@ pub async fn check_relay(my_root: &[u8]) -> Result<Vec<String>> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
     let mailbox = crypto::generate_mailbox(my_root, now); 
 
-    // Request last 50 messages
     let req = json!([ "REQ", "gossamer_sub", { "kinds": [1], "#t": [mailbox], "limit": 50 } ]);
     ws.send(Message::Text(req.to_string())).await?;
 
@@ -83,7 +78,6 @@ pub async fn check_relay(my_root: &[u8]) -> Result<Vec<String>> {
                             if v[0] == "EOSE" { break; }
                             if v[0] == "EVENT" {
                                 let content = v[2]["content"].as_str().unwrap_or("");
-                                // Handle both raw string and JSON envelope
                                 let json_content = if let Ok(j) = serde_json::from_str::<Value>(content) { j } else { Value::Null };
                                 
                                 if let (Some(p), Some(n)) = (json_content["p"].as_str(), json_content["n"].as_str()) {

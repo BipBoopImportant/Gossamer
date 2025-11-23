@@ -11,7 +11,6 @@ impl Database {
     pub fn init(path: String) -> Result<Self> {
         let conn = Connection::open(path)?;
         
-        // Standard SQLite Initialization
         conn.execute("PRAGMA journal_mode=WAL;", [])?;
         
         conn.execute("CREATE TABLE IF NOT EXISTS messages (
@@ -51,6 +50,7 @@ impl Database {
     pub fn get_messages(&self) -> Result<Vec<(String, String, String, u64, bool)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp ASC LIMIT 500")?;
+        // FIX: Handle rows result mapping
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))?;
         let mut res = Vec::new();
         for r in rows { res.push(r?); }
@@ -60,7 +60,8 @@ impl Database {
     pub fn get_identity(&self) -> Result<Option<Vec<u8>>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT root_secret FROM identity WHERE key = 'main'")?;
-        let mut rows = stmt.query([]);
+        // FIX: Handle query result properly
+        let mut rows = stmt.query([])?;
         if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
     }
@@ -99,7 +100,7 @@ impl Database {
     pub fn get_random_transit(&self) -> Result<Option<Vec<u8>>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT packet FROM transit ORDER BY RANDOM() LIMIT 1")?;
-        let mut rows = stmt.query([]);
+        let mut rows = stmt.query([])?;
         if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
     }
