@@ -9,7 +9,7 @@ class InboxScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("ENCRYPTED INBOX", style: TextStyle(letterSpacing: 2))),
       body: ListView.builder(
-        padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 120), // Bottom padding for nav bar
+        padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 120),
         itemCount: 3,
         itemBuilder: (context, index) {
           return Container(
@@ -34,7 +34,8 @@ class InboxScreen extends StatelessWidget {
                 CircleAvatar(
                   radius: 25,
                   backgroundColor: Colors.grey[800],
-                  child: const Icon(UniconsLine.user_secret, color: Colors.white),
+                  // FIX: Changed user_secret to lock (Guaranteed to exist)
+                  child: const Icon(UniconsLine.lock, color: Colors.white),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
