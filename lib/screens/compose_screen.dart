@@ -93,14 +93,19 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       if (_msgCtrl.text.isNotEmpty && _destCtrl.text.isNotEmpty) {
-                        // Auto-save to contacts if it's new
+                        // FIX: Auto-save to contacts if it's new
+                        // This ensures the UI doesn't crash by passing both arguments
                         ref.read(addContactProvider)(_destCtrl.text, "Unknown ${_destCtrl.text.substring(0,4)}");
                         
+                        // FIX: Pass BOTH destination and message
                         await ref.read(chatProvider.notifier).sendMessage(_destCtrl.text, _msgCtrl.text);
+                        
                         if(context.mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Queued for Uplink")));
                         }
+                      } else {
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Destination and Message required")));
                       }
                     },
                     style: ElevatedButton.styleFrom(
