@@ -16,7 +16,6 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
-    // Request Permissions (Updated for Android 13/14/15)
     await [
       Permission.bluetooth,
       Permission.bluetoothScan,
@@ -25,7 +24,6 @@ class MeshController {
       Permission.location,
     ].request();
 
-    // Check support (V2 API)
     final isSupported = await _peripheral.isSupported;
     if (isSupported) {
       startScanning();
@@ -48,11 +46,17 @@ class MeshController {
       }
     });
 
-    // FIX: allowDuplicates removed in 1.34+. 
-    // AndroidScanMode.lowLatency implies continuous scanning.
     FlutterBluePlus.startScan(
       androidScanMode: AndroidScanMode.lowLatency,
+      allowDuplicates: true, // Valid in 1.31.0
     );
+  }
+
+  Future<void> stop() async {
+    _isScanning = false;
+    _rotationTimer?.cancel();
+    await FlutterBluePlus.stopScan();
+    await _peripheral.stop();
   }
 
   void _startPacketRotation() {
@@ -86,12 +90,5 @@ class MeshController {
       await Future.delayed(const Duration(seconds: 15));
       await _peripheral.stop();
     } catch (e) { debugPrint("Broadcast Error: $e"); }
-  }
-  
-  Future<void> stop() async {
-    _isScanning = false;
-    _rotationTimer?.cancel();
-    await FlutterBluePlus.stopScan();
-    await _peripheral.stop();
   }
 }
