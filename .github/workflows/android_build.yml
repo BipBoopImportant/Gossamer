@@ -37,12 +37,17 @@ jobs:
         cargo install cargo-ndk
         cargo install flutter_rust_bridge_codegen --version 1.82.6
 
-    # === INSTALL ANDROID SDK 36 ===
+    # === FIX: Use Absolute Path for SDKManager ===
     - name: Install Android SDK 36
       run: |
-        yes | sdkmanager --licenses
-        # Install API 36 (Android 16 Preview) and Build Tools
-        sdkmanager "platforms;android-36" "build-tools;35.0.0"
+        # Define path to sdkmanager
+        SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        
+        # Accept licenses
+        yes | $SDKMAN --licenses
+        
+        # Install API 36 and Build Tools 35.0.0 (Required for Android 15/16)
+        $SDKMAN "platforms;android-36" "build-tools;35.0.0"
 
     - name: Add Android Targets
       run: |
@@ -58,12 +63,11 @@ jobs:
     # === FORCE SDK 36 IN GRADLE ===
     - name: Enforce Android SDK 36
       run: |
-        # Overwrite Versions
         sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
         sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 36/g' android/app/build.gradle
         sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 36/g' android/app/build.gradle
 
-    # Restore Dependencies (Using new versions from pubspec)
+    # Restore Dependencies
     - name: Restore Dependencies
       run: flutter pub get
 
