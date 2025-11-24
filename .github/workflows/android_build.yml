@@ -48,8 +48,57 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Overwrite AndroidManifest with PERFECT XML ===
-    - name: Write AndroidManifest.xml
+    # === FIX: Write local.properties (Standard method) ===
+    - name: Configure Local Properties
+      run: |
+        echo "flutter.sdk=/opt/hostedtoolcache/flutter/stable-3.19.0-x64" > android/local.properties
+        echo "flutter.buildMode=release" >> android/local.properties
+        echo "flutter.versionName=1.0.0" >> android/local.properties
+        echo "flutter.versionCode=1" >> android/local.properties
+        echo "flutter.compileSdkVersion=34" >> android/local.properties
+        echo "flutter.minSdkVersion=21" >> android/local.properties
+        echo "flutter.targetSdkVersion=34" >> android/local.properties
+
+    # === FIX: Force plugin versions in build.gradle ===
+    - name: Apply Global Gradle Configuration
+      run: |
+        cat >> android/build.gradle <<GRADLE_GLOBAL_FIX
+        
+        subprojects {
+            afterEvaluate { project ->
+                if (project.hasProperty("android")) {
+                    android {
+                        compileSdkVersion 34
+                        defaultConfig {
+                            minSdkVersion 21
+                            targetSdkVersion 34
+                        }
+                    }
+                }
+            }
+        }
+        GRADLE_GLOBAL_FIX
+
+    # Kotlin Fix
+    - name: Fix Kotlin Version
+      run: |
+        cat >> android/app/build.gradle <<GRADLE_KOTLIN_FIX
+        configurations.all {
+            resolutionStrategy {
+                eachDependency { details ->
+                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                        details.useVersion '1.8.0'
+                    }
+                }
+            }
+        }
+        GRADLE_KOTLIN_FIX
+
+    - name: Restore Dependencies
+      run: flutter pub get
+        
+    # Permissions
+    - name: Inject Permissions
       run: |
         cat > android/app/src/main/AndroidManifest.xml <<XML
         <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.gossamer.gossamer_app">
@@ -67,7 +116,7 @@ jobs:
 
             <application
                 android:label="Gossamer"
-                android:name="${applicationName}"
+                android:name="\${applicationName}"
                 android:icon="@mipmap/ic_launcher">
                 <activity
                     android:name=".MainActivity"
@@ -93,73 +142,6 @@ jobs:
         </manifest>
         XML
 
-    # === FIX: Overwrite App Gradle with Correct Versioning ===
-    - name: Write App build.gradle
-      run: |
-        cat > android/app/build.gradle <<GRADLE
-        plugins {
-            id "com.android.application"
-            id "kotlin-android"
-            id "dev.flutter.flutter-gradle-plugin"
-        }
-
-        android {
-            namespace "com.gossamer.gossamer_app"
-            compileSdkVersion 34
-            ndkVersion "25.1.8937393"
-
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-
-            kotlinOptions {
-                jvmTarget = '1.8'
-            }
-
-            sourceSets {
-                main.java.srcDirs += 'src/main/kotlin'
-            }
-
-            defaultConfig {
-                applicationId "com.gossamer.gossamer_app"
-                minSdkVersion 21
-                targetSdkVersion 34
-                versionCode 1
-                versionName "1.0.0"
-            }
-
-            buildTypes {
-                release {
-                    signingConfig signingConfigs.debug
-                }
-            }
-        }
-
-        flutter {
-            source '../..'
-        }
-
-        dependencies {
-            // Resolution Strategy for Kotlin Conflict
-            modules {
-                module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") {
-                    replacedBy("org.jetbrains.kotlin:kotlin-stdlib", "kotlin-stdlib-jdk7 is now part of kotlin-stdlib")
-                }
-                module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") {
-                    replacedBy("org.jetbrains.kotlin:kotlin-stdlib", "kotlin-stdlib-jdk8 is now part of kotlin-stdlib")
-                }
-            }
-        }
-        GRADLE
-
-    - name: Restore Dependencies
-      run: |
-        flutter pub get
-        # Re-add packages just in case pubspec was touched
-        flutter pub add ffi:2.1.2
-        flutter pub add flutter_rust_bridge:1.82.6
-        
     - name: Generate Rust Bridge
       run: |
         flutter_rust_bridge_codegen \
