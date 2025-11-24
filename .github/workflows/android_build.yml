@@ -54,9 +54,7 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === BUILD REWRITE ===
-    # We overwrite the generated build files with ones we KNOW work.
-    
+    # Build Config Injection
     - name: Write local.properties
       run: |
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
@@ -67,7 +65,7 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
 
-    - name: Write Root build.gradle (Fixes Kotlin)
+    - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
         buildscript {
@@ -81,41 +79,26 @@ jobs:
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
             }
         }
-        
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
-        
+        allprojects { repositories { google(); mavenCentral() } }
         rootProject.buildDir = '../build'
         subprojects {
             project.buildDir = "\${rootProject.buildDir}/\${project.name}"
             project.evaluationDependsOn(':app')
         }
-        
-        // GLOBAL PLUGIN FIX
         subprojects {
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
                     android {
                         compileSdkVersion 35
-                        defaultConfig {
-                            minSdkVersion 23
-                            targetSdkVersion 35
-                        }
+                        defaultConfig { minSdkVersion 23; targetSdkVersion 35 }
                     }
                 }
             }
         }
-        
-        tasks.register("clean", Delete) {
-            delete rootProject.buildDir
-        }
+        tasks.register("clean", Delete) { delete rootProject.buildDir }
         GRADLE
 
-    - name: Write App build.gradle (Force SDKs)
+    - name: Write App build.gradle
       run: |
         cat > android/app/build.gradle <<APP_GRADLE
         plugins {
@@ -123,27 +106,16 @@ jobs:
             id "kotlin-android"
             id "dev.flutter.flutter-gradle-plugin"
         }
-
         android {
             namespace "com.gossamer.gossamer_app"
             compileSdkVersion 35
             ndkVersion "25.1.8937393"
-
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-
-            kotlinOptions {
-                jvmTarget = '1.8'
-            }
-
+            compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+            kotlinOptions { jvmTarget = '1.8' }
             sourceSets {
                 main.java.srcDirs += 'src/main/kotlin'
-                // Point to where we will dump the Rust libs
                 main.jniLibs.srcDirs = ['src/main/jniLibs']
             }
-
             defaultConfig {
                 applicationId "com.gossamer.gossamer_app"
                 minSdkVersion 23
@@ -151,19 +123,9 @@ jobs:
                 versionCode 1
                 versionName "1.0.0"
             }
-
-            buildTypes {
-                release {
-                    signingConfig signingConfigs.debug
-                }
-            }
+            buildTypes { release { signingConfig signingConfigs.debug } }
         }
-
-        flutter {
-            source '../..'
-        }
-        
-        // FORCE KOTLIN RESOLUTION
+        flutter { source '../..' }
         configurations.all {
             resolutionStrategy {
                 eachDependency { details ->
@@ -213,8 +175,7 @@ jobs:
         </manifest>
         XML
 
-    # === RESTORE DEPS ===
-    # We overwrite pubspec.yaml AGAIN just to be safe, using the pinned versions
+    # === FIX: Include FFI in Pubspec ===
     - name: Restore Pubspec
       run: |
         cat > pubspec.yaml <<PUBSPEC
@@ -226,6 +187,8 @@ jobs:
         dependencies:
           flutter:
             sdk: flutter
+          # CRITICAL FIX HERE
+          ffi: ^2.1.0
           flutter_rust_bridge: 1.82.6
           flutter_blue_plus: 1.31.0
           flutter_ble_peripheral: 2.0.0
@@ -253,7 +216,6 @@ jobs:
         
         flutter pub get
 
-    # === COMPILE ===
     - name: Generate Rust Bridge
       run: |
         flutter_rust_bridge_codegen \

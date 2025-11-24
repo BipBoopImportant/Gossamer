@@ -7,6 +7,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # CRITICAL: FFI Must be present for bridge gen
+  ffi: ^2.1.0
   flutter_rust_bridge: 1.82.6
   
   # Hardware
@@ -16,7 +18,6 @@ dependencies:
   nfc_manager: 3.3.0
   mobile_scanner: 5.2.0
   path_provider: 2.1.2
-  # FIX: Upgrade share_plus to resolve 'web' conflict
   share_plus: ^10.0.0
   
   # Logic
