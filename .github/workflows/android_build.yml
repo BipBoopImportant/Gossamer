@@ -64,21 +64,78 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=36" >> android/local.properties
 
-    # === FIX: Correct Global Gradle Config ===
+    # === FIX: Inject Config via settings.gradle ===
+    # This runs BEFORE project evaluation, guaranteeing success.
+    - name: Write settings.gradle
+      run: |
+        cat > android/settings.gradle <<SETTINGS
+        pluginManagement {
+            def flutterSdkPath = {
+                def properties = new Properties()
+                file("local.properties").withInputStream { properties.load(it) }
+                def flutterSdkPath = properties.getProperty("flutter.sdk")
+                assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                return flutterSdkPath
+            }()
+        
+            includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
+        
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        
+        plugins {
+            id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+            id "com.android.application" version "8.2.0" apply false
+            id "org.jetbrains.kotlin.android" version "1.9.0" apply false
+        }
+        
+        include ":app"
+        
+        // === THE MASTER FIX ===
+        // Iterate over all projects as they are added and force configuration
+        gradle.beforeProject { project ->
+            // Force Global Properties for Plugins
+            if (project.hasProperty("android")) {
+                project.android {
+                    if (!project.android.hasProperty('flutter')) {
+                         project.ext.set('flutter', [
+                            compileSdkVersion: 36,
+                            minSdkVersion: 23,
+                            targetSdkVersion: 36
+                        ])
+                    }
+                    compileSdkVersion 36
+                    defaultConfig {
+                        minSdkVersion 23
+                        targetSdkVersion 36
+                    }
+                    if (namespace == null) {
+                        namespace = project.group
+                    }
+                }
+            }
+            // Force Kotlin Version
+            project.configurations.all {
+                resolutionStrategy {
+                    eachDependency { details ->
+                        if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                            details.useVersion '1.9.0'
+                        }
+                    }
+                }
+            }
+        }
+        SETTINGS
+
+    # === CLEAN BUILD.GRADLE ===
+    # No extra logic here, cleaner is better
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
-        // 1. Global Variables for Plugins
-        ext {
-            flutter = [
-                compileSdkVersion: 36,
-                minSdkVersion: 23,
-                targetSdkVersion: 36,
-                versionCode: 1,
-                versionName: "1.0.0"
-            ]
-        }
-
         buildscript {
             ext.kotlin_version = '1.9.0'
             repositories {
@@ -90,37 +147,17 @@ jobs:
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
             }
         }
-        
         allprojects {
             repositories {
                 google()
                 mavenCentral()
             }
         }
-        
         rootProject.buildDir = '../build'
-        
         subprojects {
             project.buildDir = "\${rootProject.buildDir}/\${project.name}"
             project.evaluationDependsOn(':app')
         }
-        
-        // 2. Force Configuration on Subprojects WITHOUT afterEvaluate
-        // We use a try-catch block or check for plugin application
-        subprojects {
-            project.afterEvaluate {
-                if (it.hasProperty('android')) {
-                    it.android {
-                        compileSdkVersion 36
-                        defaultConfig {
-                            minSdkVersion 23
-                            targetSdkVersion 36
-                        }
-                    }
-                }
-            }
-        }
-        
         tasks.register("clean", Delete) {
             delete rootProject.buildDir
         }
@@ -154,15 +191,7 @@ jobs:
             buildTypes { release { signingConfig signingConfigs.debug; minifyEnabled false; shrinkResources false } }
         }
         flutter { source '../..' }
-        configurations.all {
-            resolutionStrategy {
-                eachDependency { details ->
-                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
-                        details.useVersion '1.9.0'
-                    }
-                }
-            }
-        }
+        dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0" }
         APP_GRADLE
 
     - name: Write AndroidManifest.xml
