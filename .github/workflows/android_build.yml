@@ -68,8 +68,7 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=36" >> android/local.properties
 
-    # === NUCLEAR FIX: Root build.gradle ===
-    # We explicitly define the 'flutter' ext map globally so plugins find it immediately.
+    # === FIX: Use Plugin Application Hook ===
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
@@ -97,12 +96,21 @@ jobs:
         subprojects {
             project.buildDir = "\${rootProject.buildDir}/\${project.name}"
             project.evaluationDependsOn(':app')
-        }
 
-        // NUCLEAR OPTION: Force properties on every subproject immediately
-        subprojects {
-            afterEvaluate { project ->
-                if (project.hasProperty("android")) {
+            // REACTOR PATTERN: Configure immediately when plugin is applied
+            plugins.whenPluginAdded { plugin ->
+                if (plugin.class.name.startsWith("com.android.build.gradle")) {
+                    // Inject flutter ext if missing
+                    if (!project.extensions.findByName("flutter")) {
+                        project.ext.flutter = [
+                            compileSdkVersion: 36,
+                            minSdkVersion: 23,
+                            targetSdkVersion: 36,
+                            versionCode: 1,
+                            versionName: "1.0.0"
+                        ]
+                    }
+                    // Force Android Config
                     project.android {
                         compileSdkVersion 36
                         defaultConfig {
@@ -111,18 +119,6 @@ jobs:
                         }
                     }
                 }
-            }
-            
-            // MOCK THE FLUTTER EXTENSION FOR PLUGINS
-            // This prevents 'Could not get unknown property flutter'
-            if (!project.extensions.findByName("flutter")) {
-                project.ext.flutter = [
-                    compileSdkVersion: 36,
-                    minSdkVersion: 23,
-                    targetSdkVersion: 36,
-                    versionCode: 1,
-                    versionName: "1.0.0"
-                ]
             }
         }
         
