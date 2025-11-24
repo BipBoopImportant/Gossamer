@@ -54,11 +54,22 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX 1: Kotlin Conflict Resolution Strategy ===
+    # === FIX: Create local.properties ===
+    # This is how plugins like flutter_blue_plus find the version
+    - name: Create local.properties
+      run: |
+        echo "flutter.sdk=/opt/hostedtoolcache/flutter/stable-3.24.0-x64" > android/local.properties
+        echo "flutter.buildMode=release" >> android/local.properties
+        echo "flutter.versionName=1.0.0" >> android/local.properties
+        echo "flutter.versionCode=1" >> android/local.properties
+        echo "flutter.compileSdkVersion=36" >> android/local.properties
+        echo "flutter.minSdkVersion=23" >> android/local.properties
+        echo "flutter.targetSdkVersion=36" >> android/local.properties
+
+    # === FIX: Kotlin Conflict ===
     - name: Fix Kotlin Duplicates
       run: |
         cat >> android/app/build.gradle <<GRADLE_FIX
-        
         configurations.all {
             resolutionStrategy {
                 eachDependency { details ->
@@ -70,14 +81,12 @@ jobs:
         }
         GRADLE_FIX
 
-    # === FIX 2: Force SDK 36 ===
-    - name: Enforce Android SDK 36
+    - name: Enforce Android SDK 36 in App
       run: |
         sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
         sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 36/g' android/app/build.gradle
         sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 36/g' android/app/build.gradle
 
-    # === FIX 3: Restore Dependencies (Including FFI) ===
     - name: Restore Dependencies
       run: |
         flutter pub add ffi:^2.1.0
@@ -97,7 +106,6 @@ jobs:
         flutter pub add flutter_animate:^4.5.0
         flutter pub add unicons:^2.0.0
         flutter pub add glass_kit:^3.0.0
-        
         flutter pub get
 
     - name: Inject Permissions
@@ -117,7 +125,7 @@ jobs:
             <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
             <application
                 android:label="Gossamer"
-                android:name="\${applicationName}"
+                android:name="${applicationName}"
                 android:icon="@mipmap/ic_launcher">
                 <activity
                     android:name=".MainActivity"
@@ -140,10 +148,7 @@ jobs:
 
     - name: Generate Rust Bridge
       run: |
-        flutter_rust_bridge_codegen \
-          --rust-input native/src/api.rs \
-          --dart-output lib/bridge_generated.dart \
-          --class-name Native
+        flutter_rust_bridge_codegen           --rust-input native/src/api.rs           --dart-output lib/bridge_generated.dart           --class-name Native
 
     - name: Compile Rust Library (NDK)
       run: |
