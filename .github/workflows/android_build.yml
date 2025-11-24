@@ -18,7 +18,6 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # === FIX: Upgrade Flutter to 3.24.0 (Dart 3.5) ===
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
@@ -55,17 +54,52 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
+    # === FIX 1: Kotlin Conflict Resolution Strategy ===
+    - name: Fix Kotlin Duplicates
+      run: |
+        cat >> android/app/build.gradle <<GRADLE_FIX
+        
+        configurations.all {
+            resolutionStrategy {
+                eachDependency { details ->
+                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                        details.useVersion '1.9.0' 
+                    }
+                }
+            }
+        }
+        GRADLE_FIX
+
+    # === FIX 2: Force SDK 36 ===
     - name: Enforce Android SDK 36
       run: |
         sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
         sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 36/g' android/app/build.gradle
         sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 36/g' android/app/build.gradle
 
-    # Restore Dependencies
+    # === FIX 3: Restore Dependencies (Including FFI) ===
     - name: Restore Dependencies
-      run: flutter pub get
+      run: |
+        flutter pub add ffi:^2.1.0
+        flutter pub add flutter_rust_bridge:1.82.6
+        flutter pub add flutter_blue_plus:^1.34.5
+        flutter pub add flutter_ble_peripheral:^2.0.0
+        flutter pub add permission_handler:^12.0.0
+        flutter pub add nfc_manager:^3.5.0
+        flutter pub add mobile_scanner:^5.2.0
+        flutter pub add path_provider:^2.1.2
+        flutter pub add share_plus:^9.0.0
+        flutter pub add flutter_riverpod:^2.5.1
+        flutter pub add qr_flutter:^4.1.0
+        flutter pub add uuid:^4.5.1
+        flutter pub add intl:^0.19.0
+        flutter pub add google_fonts:^6.2.1
+        flutter pub add flutter_animate:^4.5.0
+        flutter pub add unicons:^2.0.0
+        flutter pub add glass_kit:^3.0.0
+        
+        flutter pub get
 
-    # Inject Permissions
     - name: Inject Permissions
       run: |
         cat > android/app/src/main/AndroidManifest.xml <<XML
