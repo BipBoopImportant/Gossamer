@@ -37,11 +37,13 @@ jobs:
         cargo install cargo-ndk
         cargo install flutter_rust_bridge_codegen --version 1.82.6
 
-    - name: Install Android SDK 35
+    # === INSTALL API 36 ===
+    - name: Install Android SDK 36
       run: |
         SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
         yes | $SDKMAN --licenses
-        $SDKMAN "platforms;android-35" "build-tools;34.0.0"
+        # Explicitly install android-36
+        $SDKMAN "platforms;android-36" "build-tools;35.0.0"
 
     - name: Add Android Targets
       run: |
@@ -54,17 +56,18 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
+    # === FORCE API 36 IN LOCAL PROPERTIES ===
     - name: Write local.properties
       run: |
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
         echo "flutter.buildMode=release" >> android/local.properties
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
-        echo "flutter.compileSdkVersion=35" >> android/local.properties
+        echo "flutter.compileSdkVersion=36" >> android/local.properties
         echo "flutter.minSdkVersion=23" >> android/local.properties
-        echo "flutter.targetSdkVersion=35" >> android/local.properties
+        echo "flutter.targetSdkVersion=36" >> android/local.properties
 
-    # === FIX: Inject 'flutter' ext property into ALL projects ===
+    # === FORCE API 36 IN GRADLE (ROOT) ===
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
@@ -93,27 +96,25 @@ jobs:
             project.evaluationDependsOn(':app')
         }
 
-        // GLOBAL INJECTION
+        // GLOBAL API 36 INJECTION FOR PLUGINS
         subprojects {
-            // Force the 'flutter' extension property on the android extension
-            // This mocks what the Flutter Gradle Plugin usually does
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
                     project.android {
                         if (!project.android.hasProperty('flutter')) {
                             project.android.ext.set('flutter', [
-                                compileSdkVersion: 35,
+                                compileSdkVersion: 36,
                                 minSdkVersion: 23,
-                                targetSdkVersion: 35,
+                                targetSdkVersion: 36,
                                 versionCode: 1,
                                 versionName: "1.0.0"
                             ])
                         }
                         
-                        compileSdkVersion 35
+                        compileSdkVersion 36
                         defaultConfig {
                             minSdkVersion 23
-                            targetSdkVersion 35
+                            targetSdkVersion 36
                         }
                     }
                 }
@@ -125,6 +126,7 @@ jobs:
         }
         GRADLE
 
+    # === FORCE API 36 IN APP GRADLE ===
     - name: Write App build.gradle
       run: |
         cat > android/app/build.gradle <<APP_GRADLE
@@ -135,7 +137,7 @@ jobs:
         }
         android {
             namespace "com.gossamer.gossamer_app"
-            compileSdkVersion 35
+            compileSdkVersion 36
             ndkVersion "25.1.8937393"
             compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
             kotlinOptions { jvmTarget = '1.8' }
@@ -146,14 +148,13 @@ jobs:
             defaultConfig {
                 applicationId "com.gossamer.gossamer_app"
                 minSdkVersion 23
-                targetSdkVersion 35
+                targetSdkVersion 36
                 versionCode 1
                 versionName "1.0.0"
             }
             buildTypes { release { signingConfig signingConfigs.debug; minifyEnabled false; shrinkResources false } }
         }
         flutter { source '../..' }
-        // Use ext instead of dependency constraints to be safer
         dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0" }
         APP_GRADLE
 
@@ -231,6 +232,7 @@ jobs:
         flutter:
           uses-material-design: true
         PUBSPEC
+        
         flutter pub get
 
     - name: Generate Rust Bridge
