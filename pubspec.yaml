@@ -9,14 +9,15 @@ dependencies:
     sdk: flutter
   flutter_rust_bridge: 1.82.6
   
-  # Hardware (Compatible with Android 34/35)
+  # Hardware
   flutter_blue_plus: 1.31.0
   flutter_ble_peripheral: 2.0.0
   permission_handler: 11.3.1
   nfc_manager: 3.3.0
   mobile_scanner: 5.2.0
   path_provider: 2.1.2
-  share_plus: 9.0.0
+  # FIX: Upgrade share_plus to resolve 'web' conflict
+  share_plus: ^10.0.0
   
   # Logic
   flutter_riverpod: 2.5.1
