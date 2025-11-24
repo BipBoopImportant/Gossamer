@@ -18,10 +18,11 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    # === FIX: Upgrade Flutter to 3.24.0 (Dart 3.5) ===
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.0'
+        flutter-version: '3.24.0'
         channel: 'stable'
     
     - name: Setup Rust
@@ -37,16 +38,10 @@ jobs:
         cargo install cargo-ndk
         cargo install flutter_rust_bridge_codegen --version 1.82.6
 
-    # === FIX: Use Absolute Path for SDKManager ===
     - name: Install Android SDK 36
       run: |
-        # Define path to sdkmanager
         SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-        
-        # Accept licenses
         yes | $SDKMAN --licenses
-        
-        # Install API 36 and Build Tools 35.0.0 (Required for Android 15/16)
         $SDKMAN "platforms;android-36" "build-tools;35.0.0"
 
     - name: Add Android Targets
@@ -60,7 +55,6 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FORCE SDK 36 IN GRADLE ===
     - name: Enforce Android SDK 36
       run: |
         sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
