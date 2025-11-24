@@ -16,12 +16,16 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
-    if (await Permission.bluetooth.request().isDenied) return;
-    if (await Permission.bluetoothScan.request().isDenied) return;
-    if (await Permission.bluetoothAdvertise.request().isDenied) return;
-    if (await Permission.bluetoothConnect.request().isDenied) return;
-    if (await Permission.location.request().isDenied) return;
+    // Request Permissions (Updated for Android 13/14/15)
+    await [
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
 
+    // Check support (V2 API)
     final isSupported = await _peripheral.isSupported;
     if (isSupported) {
       startScanning();
@@ -44,18 +48,11 @@ class MeshController {
       }
     });
 
+    // FIX: allowDuplicates removed in 1.34+. 
+    // AndroidScanMode.lowLatency implies continuous scanning.
     FlutterBluePlus.startScan(
       androidScanMode: AndroidScanMode.lowLatency,
     );
-  }
-
-  // FIX: New Stop Method
-  Future<void> stop() async {
-    _isScanning = false;
-    _rotationTimer?.cancel();
-    await FlutterBluePlus.stopScan();
-    await _peripheral.stop();
-    debugPrint("Mesh Stopped");
   }
 
   void _startPacketRotation() {
@@ -89,5 +86,12 @@ class MeshController {
       await Future.delayed(const Duration(seconds: 15));
       await _peripheral.stop();
     } catch (e) { debugPrint("Broadcast Error: $e"); }
+  }
+  
+  Future<void> stop() async {
+    _isScanning = false;
+    _rotationTimer?.cancel();
+    await FlutterBluePlus.stopScan();
+    await _peripheral.stop();
   }
 }
