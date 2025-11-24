@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use crate::core::{crypto, db, net, mesh};
@@ -12,21 +12,29 @@ lazy_static! {
 pub fn init_core(app_files_dir: String) -> Result<()> {
     let db_path = format!("{}/gossamer.db", app_files_dir);
     *DB_PATH.lock().unwrap() = db_path.clone();
-    let db = db::Database::init(db_path)?;
-    if db.get_identity()?.is_none() {
-        db.save_identity(&crypto::generate_identity())?;
+    
+    let db = db::Database::init(db_path).context("Failed to init DB")?;
+    
+    // Check if identity exists, if not create one
+    match db.get_identity() {
+        Ok(Some(_)) => {}, // Exists
+        Ok(None) => {
+            db.save_identity(&crypto::generate_identity()).context("Failed to save new identity")?;
+        },
+        Err(e) => return Err(e),
     }
     Ok(())
 }
 
 pub fn get_my_identity() -> Result<String> {
     let path = DB_PATH.lock().unwrap().clone();
-    let db = db::Database::init(path)?;
-    let id = db.get_identity()?.ok_or(anyhow::anyhow!("No Identity"))?;
+    let db = db::Database::init(path).context("DB Init fail in get_id")?;
+    let id = db.get_identity()?.ok_or(anyhow::anyhow!("Identity not found in DB"))?;
     Ok(hex::encode(id))
 }
 
-// NEW: Settings Functions
+// ... [Rest of the functions remain the same, they are safe] ...
+
 pub fn set_relay_url(url: String) -> Result<()> {
     net::set_relay(url);
     Ok(())
@@ -40,7 +48,7 @@ pub fn wipe_storage() -> Result<()> {
 }
 
 pub fn send_message(dest_hex: String, content: String) -> Result<()> {
-    let dest_bytes = hex::decode(dest_hex)?;
+    let dest_bytes = hex::decode(dest_hex).context("Invalid Hex Address")?;
     RUNTIME.block_on(net::send_to_relay(&dest_bytes, &content))?;
     let path = DB_PATH.lock().unwrap().clone();
     let db = db::Database::init(path)?;
@@ -49,7 +57,7 @@ pub fn send_message(dest_hex: String, content: String) -> Result<()> {
 }
 
 pub fn prepare_mesh_packet(dest_hex: String, content: String) -> Result<Vec<u8>> {
-    let dest_bytes = hex::decode(dest_hex)?;
+    let dest_bytes = hex::decode(dest_hex).context("Invalid Hex")?;
     mesh::generate_advertisement_packet(&dest_bytes, &content)
 }
 
