@@ -64,8 +64,7 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
 
-    # === FIX: Rewrite settings.gradle (Modern Flutter Structure) ===
-    # This forces the Kotlin version and dependency resolution strategy globally
+    # === FIX: Safe Global Configuration in settings.gradle ===
     - name: Write settings.gradle
       run: |
         cat > android/settings.gradle <<SETTINGS
@@ -101,8 +100,8 @@ jobs:
         
         include ":app"
         
-        // GLOBAL DEPENDENCY RESOLUTION FIX
-        gradle.lifecycle.beforeProject { project ->
+        // SAFE GLOBAL HOOK
+        gradle.beforeProject { project ->
             project.configurations.all {
                 resolutionStrategy {
                     eachDependency { details ->
@@ -115,7 +114,6 @@ jobs:
         }
         SETTINGS
 
-    # === FIX: Rewrite App build.gradle (Simplified) ===
     - name: Write App build.gradle
       run: |
         cat > android/app/build.gradle <<APP_GRADLE
