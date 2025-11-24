@@ -37,12 +37,10 @@ jobs:
         cargo install cargo-ndk
         cargo install flutter_rust_bridge_codegen --version 1.82.6
 
-    # === INSTALL API 36 ===
     - name: Install Android SDK 36
       run: |
         SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
         yes | $SDKMAN --licenses
-        # Explicitly install android-36
         $SDKMAN "platforms;android-36" "build-tools;35.0.0"
 
     - name: Add Android Targets
@@ -56,7 +54,6 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FORCE API 36 IN LOCAL PROPERTIES ===
     - name: Write local.properties
       run: |
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
@@ -67,10 +64,21 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=36" >> android/local.properties
 
-    # === FORCE API 36 IN GRADLE (ROOT) ===
+    # === FIX: Correct Global Gradle Config ===
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
+        // 1. Global Variables for Plugins
+        ext {
+            flutter = [
+                compileSdkVersion: 36,
+                minSdkVersion: 23,
+                targetSdkVersion: 36,
+                versionCode: 1,
+                versionName: "1.0.0"
+            ]
+        }
+
         buildscript {
             ext.kotlin_version = '1.9.0'
             repositories {
@@ -89,28 +97,20 @@ jobs:
                 mavenCentral()
             }
         }
-
+        
         rootProject.buildDir = '../build'
+        
         subprojects {
             project.buildDir = "\${rootProject.buildDir}/\${project.name}"
             project.evaluationDependsOn(':app')
         }
-
-        // GLOBAL API 36 INJECTION FOR PLUGINS
+        
+        // 2. Force Configuration on Subprojects WITHOUT afterEvaluate
+        // We use a try-catch block or check for plugin application
         subprojects {
-            afterEvaluate { project ->
-                if (project.hasProperty("android")) {
-                    project.android {
-                        if (!project.android.hasProperty('flutter')) {
-                            project.android.ext.set('flutter', [
-                                compileSdkVersion: 36,
-                                minSdkVersion: 23,
-                                targetSdkVersion: 36,
-                                versionCode: 1,
-                                versionName: "1.0.0"
-                            ])
-                        }
-                        
+            project.afterEvaluate {
+                if (it.hasProperty('android')) {
+                    it.android {
                         compileSdkVersion 36
                         defaultConfig {
                             minSdkVersion 23
@@ -126,7 +126,6 @@ jobs:
         }
         GRADLE
 
-    # === FORCE API 36 IN APP GRADLE ===
     - name: Write App build.gradle
       run: |
         cat > android/app/build.gradle <<APP_GRADLE
@@ -155,7 +154,15 @@ jobs:
             buildTypes { release { signingConfig signingConfigs.debug; minifyEnabled false; shrinkResources false } }
         }
         flutter { source '../..' }
-        dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0" }
+        configurations.all {
+            resolutionStrategy {
+                eachDependency { details ->
+                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                        details.useVersion '1.9.0'
+                    }
+                }
+            }
+        }
         APP_GRADLE
 
     - name: Write AndroidManifest.xml
