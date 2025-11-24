@@ -37,11 +37,13 @@ jobs:
         cargo install cargo-ndk
         cargo install flutter_rust_bridge_codegen --version 1.82.6
 
-    - name: Install Android SDK 35
+    # === INSTALL API 36 ===
+    - name: Install Android SDK 36
       run: |
         SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
         yes | $SDKMAN --licenses
-        $SDKMAN "platforms;android-35" "build-tools;34.0.0"
+        # Install 36 and matching build-tools
+        $SDKMAN "platforms;android-36" "build-tools;35.0.0"
 
     - name: Add Android Targets
       run: |
@@ -54,10 +56,11 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Upgrade Gradle Wrapper to 8.2 ===
+    # === GRADLE WRAPPER UPGRADE ===
+    # AGP 8.2+ requires Gradle 8.2+. We force 8.5 here.
     - name: Upgrade Gradle Wrapper
       run: |
-        sed -i 's/gradle-.*-all.zip/gradle-8.2-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
+        sed -i 's/gradle-.*-all.zip/gradle-8.5-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
 
     - name: Write local.properties
       run: |
@@ -65,10 +68,11 @@ jobs:
         echo "flutter.buildMode=release" >> android/local.properties
         echo "flutter.versionName=1.0.0" >> android/local.properties
         echo "flutter.versionCode=1" >> android/local.properties
-        echo "flutter.compileSdkVersion=35" >> android/local.properties
+        echo "flutter.compileSdkVersion=36" >> android/local.properties
         echo "flutter.minSdkVersion=23" >> android/local.properties
-        echo "flutter.targetSdkVersion=35" >> android/local.properties
+        echo "flutter.targetSdkVersion=36" >> android/local.properties
 
+    # === SETTINGS.GRADLE (Plugin Management) ===
     - name: Write settings.gradle
       run: |
         cat > android/settings.gradle <<SETTINGS
@@ -104,6 +108,7 @@ jobs:
         
         include ":app"
         
+        // GLOBAL SDK ENFORCEMENT
         gradle.beforeProject { project ->
             project.configurations.all {
                 resolutionStrategy {
@@ -114,9 +119,21 @@ jobs:
                     }
                 }
             }
+            // Force API 36 on all subprojects (including plugins)
+            if (project.hasProperty('android')) {
+                project.android {
+                    if (namespace == null) namespace = project.group
+                    compileSdkVersion 36
+                    defaultConfig {
+                        minSdkVersion 23
+                        targetSdkVersion 36
+                    }
+                }
+            }
         }
         SETTINGS
 
+    # === APP BUILD.GRADLE ===
     - name: Write App build.gradle
       run: |
         cat > android/app/build.gradle <<APP_GRADLE
@@ -127,7 +144,7 @@ jobs:
         }
         android {
             namespace "com.gossamer.gossamer_app"
-            compileSdkVersion 35
+            compileSdkVersion 36
             ndkVersion "25.1.8937393"
             compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
             kotlinOptions { jvmTarget = '1.8' }
@@ -138,7 +155,7 @@ jobs:
             defaultConfig {
                 applicationId "com.gossamer.gossamer_app"
                 minSdkVersion 23
-                targetSdkVersion 35
+                targetSdkVersion 36
                 versionCode 1
                 versionName "1.0.0"
             }
@@ -186,43 +203,42 @@ jobs:
         </manifest>
         XML
 
-    - name: Restore Pubspec
+    - name: Restore Dependencies
       run: |
         cat > pubspec.yaml <<PUBSPEC
         name: gossamer_app
         description: Decentralized Mesh Messenger
         version: 1.0.0+1
         environment:
-          sdk: '>=3.0.0 <4.0.0'
+          sdk: '>=3.2.0 <4.0.0'
         dependencies:
           flutter:
             sdk: flutter
           ffi: ^2.1.0
           flutter_rust_bridge: 1.82.6
-          flutter_blue_plus: 1.31.0
-          flutter_ble_peripheral: 2.0.0
-          permission_handler: 11.3.1
-          nfc_manager: 3.3.0
-          mobile_scanner: 5.2.0
-          path_provider: 2.1.2
+          flutter_blue_plus: ^1.34.5
+          flutter_ble_peripheral: ^2.0.0
+          permission_handler: ^11.3.1
+          nfc_manager: ^3.3.0
+          mobile_scanner: ^5.2.0
+          path_provider: ^2.1.2
           share_plus: ^10.0.0
-          flutter_riverpod: 2.5.1
-          qr_flutter: 4.1.0
-          uuid: 4.5.1
-          intl: 0.19.0
-          google_fonts: 6.2.1
-          flutter_animate: 4.5.0
-          unicons: 2.0.0
-          glass_kit: 3.0.0
+          flutter_riverpod: ^2.5.1
+          qr_flutter: ^4.1.0
+          uuid: ^4.5.1
+          intl: ^0.19.0
+          google_fonts: ^6.2.1
+          flutter_animate: ^4.5.0
+          unicons: ^2.0.0
+          glass_kit: ^3.0.0
         dev_dependencies:
           flutter_test:
             sdk: flutter
-          flutter_lints: 2.0.0
-          ffigen: 8.0.2
+          flutter_lints: ^3.0.0
+          ffigen: ^8.0.2
         flutter:
           uses-material-design: true
         PUBSPEC
-        
         flutter pub get
 
     - name: Generate Rust Bridge
