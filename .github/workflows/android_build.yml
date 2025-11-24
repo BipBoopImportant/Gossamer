@@ -54,6 +54,11 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
+    # === FIX: Upgrade Gradle Wrapper to 8.2 ===
+    - name: Upgrade Gradle Wrapper
+      run: |
+        sed -i 's/gradle-.*-all.zip/gradle-8.2-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
+
     - name: Write local.properties
       run: |
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
@@ -64,7 +69,6 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
 
-    # === FIX: Safe Global Configuration in settings.gradle ===
     - name: Write settings.gradle
       run: |
         cat > android/settings.gradle <<SETTINGS
@@ -100,7 +104,6 @@ jobs:
         
         include ":app"
         
-        // SAFE GLOBAL HOOK
         gradle.beforeProject { project ->
             project.configurations.all {
                 resolutionStrategy {
@@ -122,19 +125,12 @@ jobs:
             id "kotlin-android"
             id "dev.flutter.flutter-gradle-plugin"
         }
-        
         android {
             namespace "com.gossamer.gossamer_app"
             compileSdkVersion 35
             ndkVersion "25.1.8937393"
-            
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-            kotlinOptions {
-                jvmTarget = '1.8'
-            }
+            compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+            kotlinOptions { jvmTarget = '1.8' }
             sourceSets {
                 main.java.srcDirs += 'src/main/kotlin'
                 main.jniLibs.srcDirs = ['src/main/jniLibs']
@@ -146,22 +142,10 @@ jobs:
                 versionCode 1
                 versionName "1.0.0"
             }
-            buildTypes {
-                release {
-                    signingConfig signingConfigs.debug
-                    minifyEnabled false
-                    shrinkResources false
-                }
-            }
+            buildTypes { release { signingConfig signingConfigs.debug; minifyEnabled false; shrinkResources false } }
         }
-        
-        flutter {
-            source '../..'
-        }
-        
-        dependencies {
-            implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
-        }
+        flutter { source '../..' }
+        dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22" }
         APP_GRADLE
 
     - name: Write AndroidManifest.xml
