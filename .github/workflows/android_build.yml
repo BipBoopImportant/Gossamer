@@ -43,14 +43,20 @@ jobs:
         rustup target add armv7-linux-androideabi
         rustup target add x86_64-linux-android
 
-    # 1. Repair Project Structure (This might reset pubspec.yaml)
     - name: Repair Android Project
       run: |
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # 2. FIX: Force Re-Add Dependencies immediately after repair
-    - name: Force Add Critical Dependencies
+    # === CRITICAL FIX: Force MinSDK 21 and CompileSDK 34 directly in build.gradle ===
+    - name: Enforce Android SDK Versions
+      run: |
+        sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+        sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+        sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
+
+    # Restore Dependencies (Flutter Create wipes them)
+    - name: Restore Dependencies
       run: |
         flutter pub add ffi:^2.1.0
         flutter pub add flutter_rust_bridge:1.82.6
@@ -70,18 +76,7 @@ jobs:
         flutter pub add unicons:^2.0.0
         flutter pub add glass_kit:^3.0.0
 
-    # 3. Configure Build Properties
-    - name: Configure Android Properties
-      run: |
-        echo "flutter.sdk=/opt/hostedtoolcache/flutter/stable-3.19.0-x64" > android/local.properties
-        echo "flutter.buildMode=release" >> android/local.properties
-        echo "flutter.versionName=1.0.0" >> android/local.properties
-        echo "flutter.versionCode=1" >> android/local.properties
-        echo "flutter.compileSdkVersion=34" >> android/local.properties
-        echo "flutter.minSdkVersion=21" >> android/local.properties
-        echo "flutter.targetSdkVersion=34" >> android/local.properties
-
-    # 4. Inject Permissions
+    # Inject Permissions
     - name: Inject Permissions
       run: |
         cat > android/app/src/main/AndroidManifest.xml <<XML
