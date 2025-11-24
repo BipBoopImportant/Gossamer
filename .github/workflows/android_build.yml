@@ -43,13 +43,35 @@ jobs:
         rustup target add armv7-linux-androideabi
         rustup target add x86_64-linux-android
 
-    - name: Initialize Android Project
+    # 1. Repair Project Structure (This might reset pubspec.yaml)
+    - name: Repair Android Project
       run: |
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # === FIX: Write local.properties (Standard method) ===
-    - name: Configure Local Properties
+    # 2. FIX: Force Re-Add Dependencies immediately after repair
+    - name: Force Add Critical Dependencies
+      run: |
+        flutter pub add ffi:^2.1.0
+        flutter pub add flutter_rust_bridge:1.82.6
+        flutter pub add flutter_blue_plus:^1.31.0
+        flutter pub add flutter_ble_peripheral:^2.0.0
+        flutter pub add permission_handler:^11.0.0
+        flutter pub add nfc_manager:^3.3.0
+        flutter pub add mobile_scanner:^3.5.5
+        flutter pub add path_provider:^2.0.15
+        flutter pub add share_plus:^7.0.0
+        flutter pub add flutter_riverpod:^2.4.0
+        flutter pub add qr_flutter:^4.1.0
+        flutter pub add uuid:^4.5.1
+        flutter pub add intl:^0.18.0
+        flutter pub add google_fonts:^6.1.0
+        flutter pub add flutter_animate:^4.2.0
+        flutter pub add unicons:^2.0.0
+        flutter pub add glass_kit:^3.0.0
+
+    # 3. Configure Build Properties
+    - name: Configure Android Properties
       run: |
         echo "flutter.sdk=/opt/hostedtoolcache/flutter/stable-3.19.0-x64" > android/local.properties
         echo "flutter.buildMode=release" >> android/local.properties
@@ -59,45 +81,7 @@ jobs:
         echo "flutter.minSdkVersion=21" >> android/local.properties
         echo "flutter.targetSdkVersion=34" >> android/local.properties
 
-    # === FIX: Force plugin versions in build.gradle ===
-    - name: Apply Global Gradle Configuration
-      run: |
-        cat >> android/build.gradle <<GRADLE_GLOBAL_FIX
-        
-        subprojects {
-            afterEvaluate { project ->
-                if (project.hasProperty("android")) {
-                    android {
-                        compileSdkVersion 34
-                        defaultConfig {
-                            minSdkVersion 21
-                            targetSdkVersion 34
-                        }
-                    }
-                }
-            }
-        }
-        GRADLE_GLOBAL_FIX
-
-    # Kotlin Fix
-    - name: Fix Kotlin Version
-      run: |
-        cat >> android/app/build.gradle <<GRADLE_KOTLIN_FIX
-        configurations.all {
-            resolutionStrategy {
-                eachDependency { details ->
-                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
-                        details.useVersion '1.8.0'
-                    }
-                }
-            }
-        }
-        GRADLE_KOTLIN_FIX
-
-    - name: Restore Dependencies
-      run: flutter pub get
-        
-    # Permissions
+    # 4. Inject Permissions
     - name: Inject Permissions
       run: |
         cat > android/app/src/main/AndroidManifest.xml <<XML
@@ -113,7 +97,6 @@ jobs:
             <uses-permission android:name="android.permission.CAMERA"/>
             <uses-feature android:name="android.hardware.nfc" android:required="false" />
             <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
-
             <application
                 android:label="Gossamer"
                 android:name="\${applicationName}"
@@ -126,21 +109,19 @@ jobs:
                     android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                     android:hardwareAccelerated="true"
                     android:windowSoftInputMode="adjustResize">
-                    <meta-data
-                      android:name="io.flutter.embedding.android.NormalTheme"
-                      android:resource="@style/NormalTheme"
-                      />
+                    <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN"/>
                         <category android:name="android.intent.category.LAUNCHER"/>
                     </intent-filter>
                 </activity>
-                <meta-data
-                    android:name="flutterEmbedding"
-                    android:value="2" />
+                <meta-data android:name="flutterEmbedding" android:value="2" />
             </application>
         </manifest>
         XML
+
+    - name: Get Dependencies
+      run: flutter pub get
 
     - name: Generate Rust Bridge
       run: |
