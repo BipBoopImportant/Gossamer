@@ -54,7 +54,6 @@ jobs:
         rm -rf android
         flutter create . --project-name gossamer_app --platforms android --org com.gossamer
 
-    # Build Config Injection
     - name: Write local.properties
       run: |
         echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
@@ -65,6 +64,7 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
 
+    # === FIX: Correct Order in build.gradle ===
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
@@ -79,23 +79,38 @@ jobs:
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
             }
         }
-        allprojects { repositories { google(); mavenCentral() } }
-        rootProject.buildDir = '../build'
-        subprojects {
-            project.buildDir = "\${rootProject.buildDir}/\${project.name}"
-            project.evaluationDependsOn(':app')
-        }
+        
+        // GLOBAL PLUGIN FIX (Must be early)
         subprojects {
             afterEvaluate { project ->
                 if (project.hasProperty("android")) {
                     android {
                         compileSdkVersion 35
-                        defaultConfig { minSdkVersion 23; targetSdkVersion 35 }
+                        defaultConfig {
+                            minSdkVersion 23
+                            targetSdkVersion 35
+                        }
                     }
                 }
             }
         }
-        tasks.register("clean", Delete) { delete rootProject.buildDir }
+        
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        
+        rootProject.buildDir = '../build'
+        subprojects {
+            project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+            project.evaluationDependsOn(':app')
+        }
+        
+        tasks.register("clean", Delete) {
+            delete rootProject.buildDir
+        }
         GRADLE
 
     - name: Write App build.gradle
@@ -175,7 +190,6 @@ jobs:
         </manifest>
         XML
 
-    # === FIX: Include FFI in Pubspec ===
     - name: Restore Pubspec
       run: |
         cat > pubspec.yaml <<PUBSPEC
@@ -187,7 +201,6 @@ jobs:
         dependencies:
           flutter:
             sdk: flutter
-          # CRITICAL FIX HERE
           ffi: ^2.1.0
           flutter_rust_bridge: 1.82.6
           flutter_blue_plus: 1.31.0
