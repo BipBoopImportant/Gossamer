@@ -1,7 +1,6 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
-// FIX: Removed rand::seq::SliceRandom
 
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -11,31 +10,10 @@ impl Database {
     pub fn init(path: String) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute("PRAGMA journal_mode=WAL;", [])?;
-        
-        conn.execute("CREATE TABLE IF NOT EXISTS messages (
-            id TEXT PRIMARY KEY,
-            sender TEXT NOT NULL,
-            content TEXT NOT NULL,
-            timestamp INTEGER NOT NULL,
-            is_me INTEGER NOT NULL
-        )", [])?;
-        
-        conn.execute("CREATE TABLE IF NOT EXISTS identity (
-            key TEXT PRIMARY KEY,
-            root_secret BLOB
-        )", [])?;
-
-        conn.execute("CREATE TABLE IF NOT EXISTS contacts (
-            pubkey TEXT PRIMARY KEY,
-            alias TEXT NOT NULL
-        )", [])?;
-
-        conn.execute("CREATE TABLE IF NOT EXISTS transit (
-            hash TEXT PRIMARY KEY,
-            packet BLOB,
-            received_at INTEGER
-        )", [])?;
-
+        conn.execute("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sender TEXT NOT NULL, content TEXT NOT NULL, timestamp INTEGER NOT NULL, is_me INTEGER NOT NULL)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS identity (key TEXT PRIMARY KEY, root_secret BLOB)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS contacts (pubkey TEXT PRIMARY KEY, alias TEXT NOT NULL)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS transit (hash TEXT PRIMARY KEY, packet BLOB, received_at INTEGER)", [])?;
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 
@@ -101,14 +79,11 @@ impl Database {
         if let Ok(Some(row)) = rows.next() { return Ok(Some(row.get(0)?)); }
         Ok(None)
     }
-}
-    // APPENDED FUNCTION
-    impl Database {
-        pub fn wipe_data(&self) -> Result<()> {
-            let conn = self.conn.lock().unwrap();
-            conn.execute("DELETE FROM messages", [])?;
-            conn.execute("DELETE FROM transit", [])?;
-            // We do NOT delete identity or contacts
-            Ok(())
-        }
+
+    pub fn wipe_data(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM messages", [])?;
+        conn.execute("DELETE FROM transit", [])?;
+        Ok(())
     }
+}

@@ -16,7 +16,6 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
-    // Request Runtime Permissions (Android 12+ model)
     await [
       Permission.bluetooth,
       Permission.bluetoothScan,
@@ -25,7 +24,6 @@ class MeshController {
       Permission.location,
     ].request();
 
-    // Check Hardware Support
     final isSupported = await _peripheral.isSupported;
     if (isSupported) {
       startScanning();
@@ -39,7 +37,6 @@ class MeshController {
 
     FlutterBluePlus.scanResults.listen((results) {
       for (ScanResult r in results) {
-        // Filter for our Manufacturer ID (0xFFFF)
         if (r.advertisementData.manufacturerData.containsKey(0xFFFF)) {
           final data = r.advertisementData.manufacturerData[0xFFFF];
           if (data != null && data.isNotEmpty) {
@@ -49,7 +46,8 @@ class MeshController {
       }
     });
 
-    // Low Latency is required for effective mesh scanning on modern Android
+    // FIX: 'allowDuplicates' is removed in 1.34. 
+    // lowLatency mode implicitly handles aggressive scanning.
     FlutterBluePlus.startScan(
       androidScanMode: AndroidScanMode.lowLatency,
     );
@@ -69,7 +67,6 @@ class MeshController {
         final packet = await api.getTransitPacket();
         if (packet.isNotEmpty) {
           await _peripheral.stop(); 
-          
           final AdvertiseData data = AdvertiseData(
             manufacturerId: 0xFFFF,
             manufacturerData: Uint8List.fromList(packet),
@@ -85,16 +82,12 @@ class MeshController {
     try {
       final packet = await api.prepareMeshPacket(destHex: destHex, content: content);
       await _peripheral.stop();
-      
       final AdvertiseData data = AdvertiseData(
         manufacturerId: 0xFFFF,
         manufacturerData: Uint8List.fromList(packet),
         includeDeviceName: false,
       );
-      
       await _peripheral.start(advertiseData: data);
-      
-      // Broadcast for 15s before returning to rotation pool
       await Future.delayed(const Duration(seconds: 15));
       await _peripheral.stop();
     } catch (e) { debugPrint("Broadcast Error: $e"); }

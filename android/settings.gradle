@@ -1,0 +1,62 @@
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }()
+
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    plugins {
+        id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+        id "org.jetbrains.kotlin.android" version "1.9.0" apply false 
+        id "com.android.application" version "8.2.0" apply false
+    }
+}
+
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    id "com.android.application" version "8.2.0" apply false
+    id "org.jetbrains.kotlin.android" version "1.9.0" apply false
+}
+
+include ":app"
+
+// === THE FIX ===
+// Force Configuration on ALL projects (Root + App + Plugins)
+// This runs before any project is evaluated, preventing the "property not found" errors.
+gradle.beforeProject { project ->
+    // Force Android Config
+    if (project.hasProperty("android")) {
+        project.android {
+            compileSdkVersion 36
+            defaultConfig {
+                minSdkVersion 23
+                targetSdkVersion 36
+            }
+            // Fix for AGP 8 namespace requirement
+            if (namespace == null) {
+                namespace = project.group
+            }
+        }
+    }
+    // Force Flutter Extension Properties
+    // This allows plugins to read 'flutter.compileSdkVersion' even if Flutter's own plugin hasn't set it yet.
+    if (!project.extensions.findByName("flutter")) {
+        project.ext.set("flutter", [
+            compileSdkVersion: 36,
+            minSdkVersion: 23,
+            targetSdkVersion: 36,
+            versionCode: 1,
+            versionName: "1.0.0"
+        ])
+    }
+}
