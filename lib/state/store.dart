@@ -12,12 +12,8 @@ final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
     ? ffi.DynamicLibrary.executable()
     : ffi.DynamicLibrary.open('libnative.so'));
 
-// --- NEW: Add Status to ChatMessage ---
-// Note: This is a Dart-side extension, the Rust struct remains the same.
-// We will manage the status purely in the UI.
 enum MessageStatus { sending, sent, failed }
 
-// We create a wrapper class for UI state
 class UIMessage {
   final ChatMessage core;
   final MessageStatus status;
@@ -27,7 +23,6 @@ class UIMessage {
 class ChatNotifier extends StateNotifier<List<UIMessage>> {
   final Ref ref;
   Timer? _syncTimer;
-
   ChatNotifier(this.ref) : super([]);
 
   Future<void> start() async {
@@ -35,23 +30,14 @@ class ChatNotifier extends StateNotifier<List<UIMessage>> {
     _startHeartbeat();
     await sync();
   }
-
-  void _startHeartbeat() {
-    _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) => sync());
-  }
-
+  void _startHeartbeat() { _syncTimer?.cancel(); _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) => sync()); }
   @override
-  void dispose() {
-    _syncTimer?.cancel();
-    super.dispose();
-  }
+  void dispose() { _syncTimer?.cancel(); super.dispose(); }
 
   Future<void> sync() async {
     try {
       final msgs = await api.syncMessages();
       msgs.sort((a, b) => b.time.compareTo(a.time));
-      // Map to UI model
       final uiMsgs = msgs.map((m) => UIMessage(m, status: MessageStatus.sent)).toList();
       if (!listEquals(uiMsgs.map((m) => m.core.id).toList(), state.map((m) => m.core.id).toList())) {
         state = uiMsgs;
@@ -61,23 +47,23 @@ class ChatNotifier extends StateNotifier<List<UIMessage>> {
 
   Future<void> sendMessage(String dest, String text) async {
     final tempId = "temp_${DateTime.now().millisecondsSinceEpoch}";
-    
-    // 1. Optimistic Update with 'sending' status
     final tempCore = ChatMessage(id: tempId, sender: "Me", text: text, time: DateTime.now().millisecondsSinceEpoch ~/ 1000, isMe: true);
-    final tempUi = UIMessage(tempCore, status: MessageStatus.sending);
-    state = [tempUi, ...state];
+    state = [UIMessage(tempCore, status: MessageStatus.sending), ...state];
 
     try {
-      // 2. Await the real send
+      // FIX: Await the API call directly and catch its specific error
       await api.sendMessage(destHex: dest, content: text);
-      await MeshController().broadcastMessage(dest, text);
       
-      // 3. Update status to 'sent' after successful sync
-      await sync(); // This will replace the temp message with the real one from DB
+      // Update UI to 'sent' after a successful send and sync
+      // The sync will replace the temp message with the one from the DB
+      await sync();
+      
+      // Also broadcast to local mesh
+      await MeshController().broadcastMessage(dest, text);
 
     } catch (e) {
-      debugPrint("Send Error: $e");
-      // 4. Update status to 'failed' on error
+      debugPrint("FATAL SEND ERROR: $e");
+      // Update UI to show failure
       state = [
         for (final msg in state)
           if (msg.core.id == tempId) UIMessage(msg.core, status: MessageStatus.failed) else msg,
@@ -86,11 +72,9 @@ class ChatNotifier extends StateNotifier<List<UIMessage>> {
   }
 }
 
-final chatProvider = StateNotifierProvider<ChatNotifier, List<UIMessage>>((ref) {
-  return ChatNotifier(ref);
-});
+// --- Providers ---
+final chatProvider = StateNotifierProvider<ChatNotifier, List<UIMessage>>((ref) { return ChatNotifier(ref); });
 
-// --- Other providers remain unchanged ---
 final coreReadyProvider = FutureProvider<bool>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   final pin = prefs.getString('user_pin');
