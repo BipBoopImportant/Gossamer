@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
+// rand::seq::SliceRandom is not used, so it's removed
 
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -27,16 +28,9 @@ impl Database {
     pub fn get_messages(&self) -> Result<Vec<(String, String, String, u64, bool)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp DESC LIMIT 500")?;
-        
-        // FIX: Handle the Result from query_map before collecting
-        let rows_iter = stmt.query_map([], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
-        })?;
-        
+        let rows_iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))?;
         let mut res = Vec::new();
-        for row in rows_iter {
-            res.push(row?);
-        }
+        for row in rows_iter { res.push(row?); }
         Ok(res)
     }
 
@@ -51,7 +45,7 @@ impl Database {
         self.conn.lock().unwrap().execute("INSERT OR REPLACE INTO identity (key, root_secret) VALUES ('main', ?1)", params![secret])?;
         Ok(())
     }
-
+    
     pub fn resolve_sender(&self, pubkey: &str) -> String {
         let conn = self.conn.lock().unwrap();
         if let Ok(mut stmt) = conn.prepare("SELECT alias FROM contacts WHERE pubkey = ?1") {
@@ -64,7 +58,7 @@ impl Database {
         if pubkey.len() > 8 { return format!("{}...", &pubkey[0..8]); }
         pubkey.to_string()
     }
-
+    
     pub fn add_contact(&self, pubkey: &str, alias: &str) -> Result<()> {
         self.conn.lock().unwrap().execute("INSERT OR REPLACE INTO contacts (pubkey, alias) VALUES (?1, ?2)", params![pubkey, alias])?;
         Ok(())
