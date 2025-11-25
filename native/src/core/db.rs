@@ -10,28 +10,33 @@ impl Database {
     pub fn init(path: &str) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute("PRAGMA journal_mode=WAL;", [])?;
-        
         conn.execute("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sender TEXT NOT NULL, content TEXT NOT NULL, timestamp INTEGER NOT NULL, is_me INTEGER NOT NULL)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS identity (key TEXT PRIMARY KEY, root_secret BLOB)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS contacts (pubkey TEXT PRIMARY KEY, alias TEXT NOT NULL)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS transit (hash TEXT PRIMARY KEY, packet BLOB, received_at INTEGER)", [])?;
-
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 
     pub fn save_message(&self, id: &str, sender: &str, content: &str, is_me: bool) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let ts = std::time::SystemTime::now().duration_since(std.time::UNIX_EPOCH)?.as_secs();
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
         conn.execute("INSERT OR IGNORE INTO messages (id, sender, content, timestamp, is_me) VALUES (?1, ?2, ?3, ?4, ?5)", params![id, sender, content, ts, if is_me {1} else {0}])?;
         Ok(())
     }
 
     pub fn get_messages(&self) -> Result<Vec<(String, String, String, u64, bool)>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp ASC LIMIT 500")?;
-        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))?;
+        let mut stmt = conn.prepare("SELECT id, sender, content, timestamp, is_me FROM messages ORDER BY timestamp DESC LIMIT 500")?;
+        
+        // FIX: Handle the Result from query_map before collecting
+        let rows_iter = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        })?;
+        
         let mut res = Vec::new();
-        for r in rows { res.push(r?); }
+        for row in rows_iter {
+            res.push(row?);
+        }
         Ok(res)
     }
 
@@ -39,16 +44,11 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT root_secret FROM identity WHERE key = 'main'")?;
         let mut rows = stmt.query([])?;
-        if let Some(row) = rows.next()? {
-            Ok(Some(row.get(0)?))
-        } else {
-            Ok(None)
-        }
+        if let Some(row) = rows.next()? { Ok(Some(row.get(0)?)) } else { Ok(None) }
     }
 
     pub fn save_identity(&self, secret: &[u8]) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute("INSERT OR REPLACE INTO identity (key, root_secret) VALUES ('main', ?1)", params![secret])?;
+        self.conn.lock().unwrap().execute("INSERT OR REPLACE INTO identity (key, root_secret) VALUES ('main', ?1)", params![secret])?;
         Ok(())
     }
 
@@ -66,17 +66,16 @@ impl Database {
     }
 
     pub fn add_contact(&self, pubkey: &str, alias: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute("INSERT OR REPLACE INTO contacts (pubkey, alias) VALUES (?1, ?2)", params![pubkey, alias])?;
+        self.conn.lock().unwrap().execute("INSERT OR REPLACE INTO contacts (pubkey, alias) VALUES (?1, ?2)", params![pubkey, alias])?;
         Ok(())
     }
 
     pub fn get_contacts(&self) -> Result<Vec<(String, String)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT pubkey, alias FROM contacts ORDER BY alias ASC")?;
-        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let rows_iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         let mut res = Vec::new();
-        for r in rows { res.push(r?); }
+        for r in rows_iter { res.push(r?); }
         Ok(res)
     }
 
@@ -94,10 +93,6 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT packet FROM transit ORDER BY RANDOM() LIMIT 1")?;
         let mut rows = stmt.query([])?;
-        if let Some(row) = rows.next()? {
-            Ok(Some(row.get(0)?))
-        } else {
-            Ok(None)
-        }
+        if let Some(row) = rows.next()? { Ok(Some(row.get(0)?)) } else { Ok(None) }
     }
 }
