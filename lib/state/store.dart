@@ -8,44 +8,48 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../bridge_generated.dart';
 import '../services/mesh_controller.dart';
 
+// --- FFI Bridge Setup ---
 final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
     ? ffi.DynamicLibrary.executable()
     : ffi.DynamicLibrary.open('libnative.so'));
 
+// --- Providers ---
+
+// FIX 1: Central Initialization Provider
+// This runs ONCE and prepares the Rust core. All other providers will depend on it.
+final coreReadyProvider = FutureProvider<bool>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final pin = prefs.getString('user_pin');
+  if (pin == null) {
+    throw Exception("User not onboarded. PIN is missing.");
+  }
+  
+  final dir = await getApplicationDocumentsDirectory();
+  await api.initCore(appFilesDir: dir.path, pin: pin);
+  
+  // Initialize the mesh network after the core is ready
+  await MeshController().init();
+  
+  return true; // Signal success
+});
+
 class ChatNotifier extends StateNotifier<List<ChatMessage>> {
+  final Ref ref;
   Timer? _syncTimer;
 
-  ChatNotifier() : super([]);
+  ChatNotifier(this.ref) : super([]);
 
-  // FIX: This now only requires the directory path
-  Future<void> initializeWithPin(String pin) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      // 'pin' is no longer passed directly here but would be used to unlock db
-      // which we've simplified for this build
-      await api.initCore(appFilesDir: dir.path);
-      
-      await sync();
-      await MeshController().init();
-      _startHeartbeat();
-    } catch (e) {
-      debugPrint("Core Init Error: $e");
-    }
-  }
-
-  Future<void> attemptAutoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pin = prefs.getString('user_pin');
-    if (pin != null) {
-      await initializeWithPin(pin);
-    }
+  // This is now called by the UI after core is ready.
+  Future<void> start() async {
+    // Wait for the core to be initialized.
+    await ref.read(coreReadyProvider.future);
+    _startHeartbeat();
+    await sync();
   }
 
   void _startHeartbeat() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      await sync();
-    });
+    _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) => sync());
   }
 
   @override
@@ -58,10 +62,13 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       final msgs = await api.syncMessages();
       msgs.sort((a, b) => b.time.compareTo(a.time));
-      if (msgs.length != state.length || (msgs.isNotEmpty && state.isNotEmpty && msgs.first.id != state.first.id)) {
+      // Only update state if the data has actually changed
+      if (!listEquals(msgs, state)) {
         state = msgs;
       }
-    } catch (e) {}
+    } catch (e) {
+      // Fail silently on network errors
+    }
   }
 
   Future<void> sendMessage(String dest, String text) async {
@@ -75,30 +82,34 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
       debugPrint("Send Error: $e");
     }
   }
-  
-  void deleteMessage(String id) {
-    state = state.where((m) => m.id != id).toList();
-  }
 }
 
 final chatProvider = StateNotifierProvider<ChatNotifier, List<ChatMessage>>((ref) {
-  return ChatNotifier();
+  return ChatNotifier(ref);
 });
 
+// FIX 2: All data providers now DEPEND on coreReadyProvider.
 final identityProvider = FutureProvider<String>((ref) async {
-  final dir = await getApplicationDocumentsDirectory();
-  // Call init without PIN
-  await api.initCore(appFilesDir: dir.path);
+  await ref.watch(coreReadyProvider.future);
   return api.getMyIdentity();
 });
 
 final contactsProvider = FutureProvider<List<Contact>>((ref) async {
-  final dir = await getApplicationDocumentsDirectory();
-  await api.initCore(appFilesDir: dir.path);
+  await ref.watch(coreReadyProvider.future);
   return api.getContacts();
 });
 
 final addContactProvider = Provider((ref) => (String key, String alias) async {
   await api.addContact(pubkey: key, alias: alias);
   ref.refresh(contactsProvider);
+});
+
+// Provider for completing the onboarding process
+final onboardingProvider = Provider((ref) => (String pin) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('onboarding_complete', true);
+  await prefs.setString('user_pin', pin);
+  // Invalidate the old providers so they re-run with the new PIN
+  ref.invalidate(coreReadyProvider);
+  ref.invalidate(identityProvider);
 });
