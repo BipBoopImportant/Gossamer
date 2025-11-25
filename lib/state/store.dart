@@ -4,6 +4,7 @@ import 'dart:ffi' as ffi;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../bridge_generated.dart';
 import '../services/mesh_controller.dart';
 
@@ -14,33 +15,33 @@ final api = NativeImpl(io.Platform.isIOS || io.Platform.isMacOS
 class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   Timer? _syncTimer;
 
-  ChatNotifier() : super([]) {
-    // Auto-Initialize on creation
-    initialize();
-  }
+  ChatNotifier() : super([]);
 
-  Future<void> initialize() async {
+  // Called by Onboarding
+  Future<void> initializeWithPin(String pin) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      await api.initCore(appFilesDir: dir.path);
+      await api.initCore(appFilesDir: dir.path, pin: pin);
       
-      // Initial Sync
       await sync();
-      
-      // Start Hardware Mesh
       await MeshController().init();
-      
-      // Start Auto-Sync Loop (Heartbeat)
       _startHeartbeat();
-      
     } catch (e) {
       debugPrint("Core Init Error: $e");
     }
   }
 
+  // Called by Main (Auto-login)
+  Future<void> attemptAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pin = prefs.getString('user_pin');
+    if (pin != null) {
+      await initializeWithPin(pin);
+    }
+  }
+
   void _startHeartbeat() {
     _syncTimer?.cancel();
-    // Poll every 5 seconds for new messages from Relay/Mesh
     _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       await sync();
     });
@@ -55,39 +56,21 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
   Future<void> sync() async {
     try {
       final msgs = await api.syncMessages();
-      // Sort: Newest first
       msgs.sort((a, b) => b.time.compareTo(a.time));
-      
-      // Only update state if changed (simple check) to prevent redraws
       if (msgs.length != state.length) {
         state = msgs;
       } else if (msgs.isNotEmpty && state.isNotEmpty && msgs.first.id != state.first.id) {
         state = msgs;
       }
-    } catch (e) {
-      // Silent fail on network error (keep local state)
-    }
+    } catch (e) {}
   }
 
   Future<void> sendMessage(String dest, String text) async {
     try {
-      // Optimistic UI Update
-      final temp = ChatMessage(
-        id: "temp_${DateTime.now().millisecondsSinceEpoch}", 
-        sender: "Me", 
-        text: text, 
-        time: DateTime.now().millisecondsSinceEpoch ~/ 1000, 
-        isMe: true
-      );
+      final temp = ChatMessage(id: "temp_${DateTime.now().millisecondsSinceEpoch}", sender: "Me", text: text, time: DateTime.now().millisecondsSinceEpoch ~/ 1000, isMe: true);
       state = [temp, ...state];
-      
-      // 1. Network Send
       await api.sendMessage(destHex: dest, content: text);
-      
-      // 2. Mesh Broadcast
       await MeshController().broadcastMessage(dest, text);
-      
-      // 3. Confirm Sync
       await sync();
     } catch (e) {
       debugPrint("Send Error: $e");
@@ -104,16 +87,11 @@ final chatProvider = StateNotifierProvider<ChatNotifier, List<ChatMessage>>((ref
 });
 
 final identityProvider = FutureProvider<String>((ref) async {
-  // Ensure Core is ready before fetching Identity
-  final dir = await getApplicationDocumentsDirectory();
-  await api.initCore(appFilesDir: dir.path);
+  // We assume Core is already init via chatProvider for simplicity in this specific arch
   return api.getMyIdentity();
 });
 
 final contactsProvider = FutureProvider<List<Contact>>((ref) async {
-  // Ensure Core is ready
-  final dir = await getApplicationDocumentsDirectory();
-  await api.initCore(appFilesDir: dir.path);
   return api.getContacts();
 });
 

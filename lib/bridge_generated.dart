@@ -1,7 +1,9 @@
-// Stub for local analysis. Replaced by Codegen in CI.
 class NativeImpl {
   NativeImpl(dynamic _);
-  Future<void> initCore({required String appFilesDir}) async {}
+  // UPDATED: Now takes PIN
+  Future<void> initCore({required String appFilesDir, required String pin}) async {}
+  Future<bool> checkDbExists({required String appFilesDir}) async => false;
+  
   Future<String> getMyIdentity() async => "";
   Future<void> sendMessage({required String destHex, required String content}) async {}
   Future<List<ChatMessage>> syncMessages() async => [];
@@ -10,6 +12,8 @@ class NativeImpl {
   Future<List<int>> prepareMeshPacket({required String destHex, required String content}) async => [];
   Future<void> ingestMeshPacket({required List<int> data}) async {}
   Future<List<int>> getTransitPacket() async => [];
+  Future<void> setRelayUrl({required String url}) async {}
+  Future<String> getRelayUrl() async => "wss://relay.damus.io";
 }
 class ChatMessage {
   final String id;
