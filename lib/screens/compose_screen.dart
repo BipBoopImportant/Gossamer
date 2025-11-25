@@ -29,17 +29,17 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         backgroundColor: const Color(0xFF050507),
-        appBar: AppBar(title: const Text("NEW TRANSMISSION", style: TextStyle(letterSpacing: 2, fontSize: 14))),
+        appBar: AppBar(title: const Text("NEW TRANSMISSION")),
         body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("TARGET IDENTITY", style: TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const Text("TARGET IDENTITY", style: TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           TextField(controller: _destCtrl, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12), maxLines: 2, decoration: InputDecoration(hintText: "Paste Hex Key or Scan...", suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(icon: const Icon(UniconsLine.book_open, color: Color(0xFF6C63FF)), onPressed: () async { final result = await showModalBottomSheet<String>(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (c) => const ContactPicker()); if (result != null) setState(() => _destCtrl.text = result); }),
+            IconButton(icon: const Icon(UniconsLine.book_open, color: Color(0xFF6C63FF)), onPressed: () async { final result = await showModalBottomSheet<String>(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (c) => const ContactPicker()); _handleScanResult(result); }),
             IconButton(icon: const Icon(UniconsLine.qrcode_scan, color: Colors.white54), onPressed: () async { final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const QrScanScreen())); _handleScanResult(result); }),
             IconButton(icon: const Icon(UniconsLine.wifi_router, color: Colors.white54), onPressed: () async { final result = await Navigator.push(context, MaterialPageRoute(builder: (c) => const NfcScreen(myIdentity: null))); _handleScanResult(result); }),
           ]))),
           const SizedBox(height: 24),
-          const Text("ENCRYPTED PAYLOAD", style: TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const Text("ENCRYPTED PAYLOAD", style: TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Expanded(child: TextField(controller: _msgCtrl, maxLines: null, expands: true, textAlignVertical: TextAlignVertical.top, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: "Enter message content..."))),
           const SizedBox(height: 24),
@@ -49,9 +49,14 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
               final msg = _msgCtrl.text.trim();
               ref.read(addContactProvider)(dest, "Unknown ${dest.substring(0,4)}");
               await ref.read(chatProvider.notifier).sendMessage(dest, msg);
-              if(context.mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Queued for Uplink"))); }
+              
+              if(context.mounted) {
+                // FIX: Pop first, then show SnackBar on the PREVIOUS screen's context
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uplink Initiated..."), duration: Duration(seconds: 1)));
+              }
             }
-          }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), icon: const Icon(UniconsLine.rocket, color: Colors.white), label: const Text("INITIATE UPLINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1))))),
+          }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), icon: const Icon(UniconsLine.rocket, color: Colors.white), label: const Text("INITIATE UPLINK")))),
         ])),
       ),
     );
