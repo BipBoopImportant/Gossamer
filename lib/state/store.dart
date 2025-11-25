@@ -17,11 +17,13 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
 
   ChatNotifier() : super([]);
 
-  // Called by Onboarding
+  // FIX: This now only requires the directory path
   Future<void> initializeWithPin(String pin) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      await api.initCore(appFilesDir: dir.path, pin: pin);
+      // 'pin' is no longer passed directly here but would be used to unlock db
+      // which we've simplified for this build
+      await api.initCore(appFilesDir: dir.path);
       
       await sync();
       await MeshController().init();
@@ -31,7 +33,6 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     }
   }
 
-  // Called by Main (Auto-login)
   Future<void> attemptAutoLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final pin = prefs.getString('user_pin');
@@ -57,9 +58,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       final msgs = await api.syncMessages();
       msgs.sort((a, b) => b.time.compareTo(a.time));
-      if (msgs.length != state.length) {
-        state = msgs;
-      } else if (msgs.isNotEmpty && state.isNotEmpty && msgs.first.id != state.first.id) {
+      if (msgs.length != state.length || (msgs.isNotEmpty && state.isNotEmpty && msgs.first.id != state.first.id)) {
         state = msgs;
       }
     } catch (e) {}
@@ -87,11 +86,15 @@ final chatProvider = StateNotifierProvider<ChatNotifier, List<ChatMessage>>((ref
 });
 
 final identityProvider = FutureProvider<String>((ref) async {
-  // We assume Core is already init via chatProvider for simplicity in this specific arch
+  final dir = await getApplicationDocumentsDirectory();
+  // Call init without PIN
+  await api.initCore(appFilesDir: dir.path);
   return api.getMyIdentity();
 });
 
 final contactsProvider = FutureProvider<List<Contact>>((ref) async {
+  final dir = await getApplicationDocumentsDirectory();
+  await api.initCore(appFilesDir: dir.path);
   return api.getContacts();
 });
 
