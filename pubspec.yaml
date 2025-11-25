@@ -16,7 +16,7 @@ dependencies:
   glass_kit: ^3.0.0
   intl: ^0.18.0
   
-  # Hardware
+  # Hardware & Storage
   path_provider: ^2.0.15
   nfc_manager: ^3.3.0
   share_plus: ^7.0.0
@@ -26,10 +26,13 @@ dependencies:
   permission_handler: ^11.0.0
   shared_preferences: ^2.2.0
   
-  # Logic
+  # Logic & Features
   flutter_riverpod: ^2.4.0
   qr_flutter: ^4.1.0
   uuid: ^3.0.7
+  image_picker: ^1.0.0
+  image: ^4.0.17 # For resizing
+  
 
 dev_dependencies:
   flutter_test:
