@@ -68,13 +68,11 @@ jobs:
         echo "flutter.minSdkVersion=23" >> android/local.properties
         echo "flutter.targetSdkVersion=36" >> android/local.properties
 
-    # === MASTER FIX: Root build.gradle ===
-    # 1. Defines Global Flutter Variables (Fixes flutter_blue_plus)
-    # 2. Injects Namespace if missing (Fixes nfc_manager)
+    # === FIX: Robust Gradle Configuration Logic ===
     - name: Write Root build.gradle
       run: |
         cat > android/build.gradle <<GRADLE
-        // 1. Global Config for Plugins
+        // 1. Global Config (Must be first for plugins to see it)
         ext {
             flutter = [
                 compileSdkVersion: 36,
@@ -109,22 +107,33 @@ jobs:
         subprojects {
             project.buildDir = "\${rootProject.buildDir}/\${project.name}"
             project.evaluationDependsOn(':app')
-            
-            // 2. FIX: Inject Namespace and SDK Versions into Plugins
-            afterEvaluate { project ->
-                if (project.hasProperty("android")) {
-                    project.android {
-                        // Fix Missing Namespace error (AGP 8 requirement)
+
+            // 2. THE FIX: Safe Logic Injection
+            // We define the logic in a closure
+            def configureAndroid = { proj ->
+                if (proj.hasProperty("android")) {
+                    proj.android {
+                        // Fix Missing Namespace (Critical for AGP 8+)
                         if (namespace == null) {
-                            namespace = project.group
+                            namespace = proj.group
                         }
-                        // Force SDK Versions to match API 36
+                        // Force SDK Versions
                         compileSdkVersion 36
                         defaultConfig {
                             minSdkVersion 23
                             targetSdkVersion 36
                         }
                     }
+                }
+            }
+
+            // 3. Apply logic based on current state
+            // If already evaluated, run immediately. If not, wait.
+            if (project.state.executed) {
+                configureAndroid(project)
+            } else {
+                project.afterEvaluate {
+                    configureAndroid(project)
                 }
             }
         }
@@ -145,22 +154,19 @@ jobs:
                 assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
                 return flutterSdkPath
             }()
-        
             includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
-        
-            repositories {
-                google()
-                mavenCentral()
-                gradlePluginPortal()
+            repositories { google(); mavenCentral(); gradlePluginPortal() }
+            plugins {
+                id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+                id "org.jetbrains.kotlin.android" version "1.9.0" apply false 
+                id "com.android.application" version "8.2.0" apply false
             }
         }
-        
         plugins {
             id "dev.flutter.flutter-plugin-loader" version "1.0.0"
             id "com.android.application" version "8.2.0" apply false
             id "org.jetbrains.kotlin.android" version "1.9.0" apply false
         }
-        
         include ":app"
         SETTINGS
 
@@ -194,7 +200,6 @@ jobs:
         flutter { source '../..' }
         dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0" }
         
-        // Kotlin Conflict Resolution
         configurations.all {
             resolutionStrategy {
                 eachDependency { details ->
@@ -251,7 +256,7 @@ jobs:
         description: Decentralized Mesh Messenger
         version: 1.0.0+1
         environment:
-          sdk: '>=3.0.0 <4.0.0'
+          sdk: '>=3.2.0 <4.0.0'
         dependencies:
           flutter:
             sdk: flutter
