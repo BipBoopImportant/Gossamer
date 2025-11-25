@@ -24,6 +24,7 @@ dependencies:
   flutter_blue_plus: ^1.31.0
   flutter_ble_peripheral: ^2.0.0
   permission_handler: ^11.0.0
+  shared_preferences: ^2.2.0
   
   # Logic
   flutter_riverpod: ^2.4.0
@@ -38,4 +39,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  shared_preferences: ^2.2.0

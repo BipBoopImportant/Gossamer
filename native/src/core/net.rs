@@ -9,8 +9,9 @@ use secp256k1::{Secp256k1, Message as SecpMessage};
 use sha2::{Sha256, Digest};
 use rand;
 
-pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
-    let url = Url::parse("wss://relay.damus.io")?;
+// FIX: Updated signature to accept relay_url
+pub async fn send_to_relay(relay_url: &str, dest_root: &[u8], msg: &str) -> Result<()> {
+    let url = Url::parse(relay_url)?;
     let (mut ws, _) = connect_async(url).await?;
 
     let (ct, nonce) = crypto::encrypt(dest_root, msg.as_bytes())?;
@@ -54,8 +55,9 @@ pub async fn send_to_relay(dest_root: &[u8], msg: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn check_relay(my_root: &[u8]) -> Result<Vec<String>> {
-    let url = Url::parse("wss://relay.damus.io")?;
+// FIX: Updated signature to accept relay_url
+pub async fn check_relay(relay_url: &str, my_root: &[u8]) -> Result<Vec<String>> {
+    let url = Url::parse(relay_url)?;
     let (mut ws, _) = connect_async(url).await?;
 
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
@@ -65,7 +67,7 @@ pub async fn check_relay(my_root: &[u8]) -> Result<Vec<String>> {
     ws.send(Message::Text(req.to_string())).await?;
 
     let mut results = Vec::new();
-    let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(2));
+    let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(3));
     tokio::pin!(timeout);
 
     loop {

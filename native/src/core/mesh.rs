@@ -12,7 +12,8 @@ pub struct BlePacket {
 
 pub fn handle_incoming_bytes(data: &[u8], db_path: &str) -> Result<()> {
     if let Ok(packet) = bincode::deserialize::<BlePacket>(data) {
-        let db = db::Database::init(db_path.to_string())?;
+        // FIX: db::Database::init expects &str, so we pass db_path directly
+        let db = db::Database::init(db_path)?;
         let mut is_for_me = false;
 
         if let Ok(Some(my_root)) = db.get_identity() {
@@ -26,22 +27,8 @@ pub fn handle_incoming_bytes(data: &[u8], db_path: &str) -> Result<()> {
                         let ts_short = packet.ts_short;
                         nonce[0..4].copy_from_slice(&ts_short.to_be_bytes());
                         if let Ok(plain) = crypto::decrypt(&my_root, &nonce, &packet.ct) {
-                            // Try to parse Inner Payload (JSON) for sender info
-                            // If fail, treat as raw string
-                            let raw_text = String::from_utf8_lossy(&plain).to_string();
-                            
-                            let (sender, content) = if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw_text) {
-                                let s = val["sender"].as_str().unwrap_or("Unknown");
-                                let c = val["content"].as_str().unwrap_or("");
-                                (s.to_string(), c.to_string())
-                            } else {
-                                ("Unknown".to_string(), raw_text)
-                            };
-                            
-                            // Resolve Alias
-                            let alias = db.resolve_sender(&sender);
-                            
-                            db.save_message(&uuid::Uuid::new_v4().to_string(), &alias, &content, false)?;
+                            let text = String::from_utf8_lossy(&plain).to_string();
+                            db.save_message(&uuid::Uuid::new_v4().to_string(), "Mesh Peer", &text, false)?;
                             is_for_me = true;
                             break;
                         }
@@ -74,7 +61,8 @@ pub fn generate_advertisement_packet(dest_root: &[u8], msg: &str) -> Result<Vec<
 }
 
 pub fn get_next_packet_to_broadcast(db_path: &str) -> Result<Option<Vec<u8>>> {
-    let db = db::Database::init(db_path.to_string())?;
+    // FIX: Pass db_path directly
+    let db = db::Database::init(db_path)?;
     if rand::random::<bool>() {
         if let Ok(Some(transit)) = db.get_random_transit() {
             return Ok(Some(transit));
