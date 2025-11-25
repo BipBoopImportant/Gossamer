@@ -25,14 +25,17 @@ dependencies:
   flutter_ble_peripheral: ^2.0.0
   permission_handler: ^11.0.0
   shared_preferences: ^2.2.0
+  image_picker: ^1.0.0
+  image: ^4.0.17
   
-  # Logic & Features
+  # NEW: Audio
+  record: ^5.0.0
+  audioplayers: ^5.2.0
+  
+  # Logic
   flutter_riverpod: ^2.4.0
   qr_flutter: ^4.1.0
   uuid: ^3.0.7
-  image_picker: ^1.0.0
-  image: ^4.0.17 # For resizing
-  
 
 dev_dependencies:
   flutter_test:

@@ -16,11 +16,13 @@ class MeshController {
   Timer? _rotationTimer;
 
   Future<void> init() async {
+    // Add Microphone permission to the list
     if (await Permission.bluetooth.request().isDenied) return;
     if (await Permission.bluetoothScan.request().isDenied) return;
     if (await Permission.bluetoothAdvertise.request().isDenied) return;
     if (await Permission.bluetoothConnect.request().isDenied) return;
     if (await Permission.location.request().isDenied) return;
+    if (await Permission.microphone.request().isDenied) return;
 
     final isSupported = await _peripheral.isSupported;
     if (isSupported) {
@@ -60,6 +62,7 @@ class MeshController {
   }
 
   Future<void> broadcastMessage(String destHex, String content) async {
+    // We only broadcast text for now due to size limits
     try {
       final packet = await api.prepareMeshPacket(destHex: destHex, content: content);
       await _peripheral.stop();
