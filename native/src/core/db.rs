@@ -68,6 +68,19 @@ impl Database {
         Ok(())
     }
 
+    pub fn resolve_sender(&self, pubkey: &str) -> String {
+        let conn = self.conn.lock().unwrap();
+        if let Ok(mut stmt) = conn.prepare("SELECT alias FROM contacts WHERE pubkey = ?1") {
+            if let Ok(mut rows) = stmt.query([pubkey]) {
+                if let Ok(Some(row)) = rows.next() {
+                     if let Ok(alias) = row.get::<_, String>(0) { return alias; }
+                }
+            }
+        }
+        if pubkey.len() > 8 { return format!("{}...", &pubkey[0..8]); }
+        pubkey.to_string()
+    }
+
     pub fn add_contact(&self, pubkey: &str, alias: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("INSERT OR REPLACE INTO contacts (pubkey, alias) VALUES (?1, ?2)", params![pubkey, alias])?;
@@ -81,20 +94,6 @@ impl Database {
         let mut res = Vec::new();
         for r in rows { res.push(r?); }
         Ok(res)
-    }
-    
-    // Missing in previous scripts: Resolve Sender
-    pub fn resolve_sender(&self, pubkey: &str) -> String {
-        let conn = self.conn.lock().unwrap();
-        if let Ok(mut stmt) = conn.prepare("SELECT alias FROM contacts WHERE pubkey = ?1") {
-            if let Ok(mut rows) = stmt.query([pubkey]) {
-                if let Ok(Some(row)) = rows.next() {
-                     if let Ok(alias) = row.get::<_, String>(0) { return alias; }
-                }
-            }
-        }
-        if pubkey.len() > 8 { return format!("{}...", &pubkey[0..8]); }
-        pubkey.to_string()
     }
 
     pub fn save_transit(&self, packet: &[u8]) -> Result<()> {

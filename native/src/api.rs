@@ -1,187 +1,130 @@
-use anyhow::{Result, anyhow};
-use lazy_static::lazy_static;
-use std::sync::Mutex;
-use crate::core::{crypto, db, net, mesh};
-use tokio::runtime::Runtime;
+use anyhow::Result;
+use crate::core::{crypto, db, net, mesh, state};
 use serde_json::json;
 
-lazy_static! {
-    static ref DB_PATH: Mutex<String> = Mutex::new("gossamer.db".to_string());
-    static ref RUNTIME: Runtime = Runtime::new().unwrap();
-    static ref RELAY_URL: Mutex<String> = Mutex::new("wss://relay.damus.io".to_string());
-}
+// API functions must be clean for the code generator
 
-// Helper to access DB safely
-fn with_db<F, R>(f: F) -> Result<R>
-where F: FnOnce(&db::Database) -> Result<R> {
-    let lock = DB.lock().map_err(|_| anyhow!("DB Mutex Poisoned"))?;
-    match &*lock {
-        Some(db) => f(db),
-        None => Err(anyhow!("Database not initialized. Complete onboarding first.")),
-    }
-}
-
-static ref DB: Mutex<Option<db::Database>> = Mutex::new(None);
-
-// UPDATED: Now requires PIN to unlock/create
-pub fn init_core(app_files_dir: String, pin: String) -> Result<()> {
+pub fn init_core(app_files_dir: String) -> Result<()> {
     let db_path = format!("{}/gossamer.db", app_files_dir);
+    state::set_db_path(db_path.clone());
     
-    let mut lock = DB.lock().map_err(|_| anyhow!("DB Mutex Poisoned"))?;
-    if lock.is_none() {
-        // In a real SQLCipher setup, 'pin' would be the PRAGMA key.
-        // Here we use it to derive the Identity seed if it doesn't exist.
-        let db = db::Database::init(&db_path)?;
-        
-        if db.get_identity()?.is_none() {
-            // Generate new identity
-            let new_id = crypto::generate_identity();
-            db.save_identity(&new_id)?;
-        }
-        
-        *lock = Some(db);
+    // Fix: init expects &str
+    let db = db::Database::init(&db_path)?;
+    if db.get_identity()?.is_none() {
+        db.save_identity(&crypto::generate_identity())?;
     }
     Ok(())
 }
 
-pub fn check_db_exists(app_files_dir: String) -> Result<bool> {
-    let path = std::path::Path::new(&app_files_dir).join("gossamer.db");
-    Ok(path.exists())
-}
-
 pub fn set_relay_url(url: String) -> Result<()> {
-    *RELAY_URL.lock().unwrap() = url;
+    state::set_relay(url);
     Ok(())
 }
 
 pub fn get_relay_url() -> Result<String> {
-    Ok(RELAY_URL.lock().unwrap().clone())
+    Ok(state::get_relay())
 }
 
 pub fn get_my_identity() -> Result<String> {
-    with_db(|db| {
-        let id = db.get_identity()?.ok_or(anyhow!("No Identity"))?;
-        Ok(hex::encode(id))
-    })
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    let id = db.get_identity()?.ok_or(anyhow::anyhow!("No Identity"))?;
+    Ok(hex::encode(id))
 }
 
 pub fn send_message(dest_hex: String, content: String) -> Result<()> {
-    let dest_bytes = hex::decode(&dest_hex).map_err(|_| anyhow!("Invalid Hex"))?;
-    let my_id_hex = get_my_identity()?;
+    let dest_bytes = hex::decode(dest_hex)?;
+    
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    let my_id = db.get_identity()?.ok_or(anyhow::anyhow!("No Identity"))?;
+    let my_id_hex = hex::encode(my_id);
+    
     let payload = json!({
         "sender": my_id_hex,
         "content": content
     }).to_string();
     
-    let relay = RELAY_URL.lock().unwrap().clone();
-    if let Err(e) = RUNTIME.block_on(net::send_to_relay(&relay, &dest_bytes, &payload)) {
-        println!("Relay Send Warning: {}", e);
+    let relay = state::get_relay();
+    
+    // Fix: Use state helper to block on async
+    if let Err(e) = state::block_on(net::send_to_relay(&relay, &dest_bytes, &payload)) {
+        println!("Relay Send Error: {}", e);
     }
     
-    with_db(|db| {
-        db.save_message(&uuid::Uuid::new_v4().to_string(), "Me", &content, true)?;
-        Ok(())
-    })
+    db.save_message(&uuid::Uuid::new_v4().to_string(), "Me", &content, true)?;
+    Ok(())
 }
 
 pub fn sync_messages() -> Result<Vec<ChatMessage>> {
-    let my_id_bytes = with_db(|db| {
-        db.get_identity()?.ok_or(anyhow!("No Identity"))
-    })?;
-
-    let relay = RELAY_URL.lock().unwrap().clone();
-    if let Ok(new_msgs) = RUNTIME.block_on(net::check_relay(&relay, &my_id_bytes)) {
-        with_db(|db| {
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    
+    if let Ok(Some(my_id)) = db.get_identity() {
+        let relay = state::get_relay();
+        if let Ok(new_msgs) = state::block_on(net::check_relay(&relay, &my_id)) {
             for raw_msg in new_msgs {
                 let (sender, content) = if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw_msg) {
-                    (val["sender"].as_str().unwrap_or("Unknown").to_string(), 
-                     val["content"].as_str().unwrap_or("").to_string())
-                } else { ("Unknown".to_string(), raw_msg) };
+                    let s = val["sender"].as_str().unwrap_or("Unknown");
+                    let c = val["content"].as_str().unwrap_or("");
+                    (s.to_string(), c.to_string())
+                } else {
+                    ("Unknown".to_string(), raw_msg)
+                };
                 
                 let alias = db.resolve_sender(&sender);
                 let _ = db.save_message(&uuid::Uuid::new_v4().to_string(), &alias, &content, false);
             }
-            Ok(())
-        })?;
+        }
     }
 
-    with_db(|db| {
-        let rows = db.get_messages()?;
-        let mut result = Vec::new();
-        for (id, sender, text, time, is_me) in rows {
-            result.push(ChatMessage { id, sender, text, time, is_me });
-        }
-        Ok(result)
-    })
+    let rows = db.get_messages()?;
+    let mut result = Vec::new();
+    for (id, sender, text, time, is_me) in rows {
+        result.push(ChatMessage { id, sender, text, time, is_me });
+    }
+    Ok(result)
 }
 
 pub fn add_contact(pubkey: String, alias: String) -> Result<()> {
-    with_db(|db| {
-        db.add_contact(&pubkey, &alias)?;
-        Ok(())
-    })
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    db.add_contact(&pubkey, &alias)?;
+    Ok(())
 }
 
 pub fn get_contacts() -> Result<Vec<Contact>> {
-    with_db(|db| {
-        let rows = db.get_contacts()?;
-        let mut result = Vec::new();
-        for (pubkey, alias) in rows {
-            result.push(Contact { pubkey, alias });
-        }
-        Ok(result)
-    })
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    let rows = db.get_contacts()?;
+    let mut result = Vec::new();
+    for (pubkey, alias) in rows {
+        result.push(Contact { pubkey, alias });
+    }
+    Ok(result)
 }
 
 pub fn prepare_mesh_packet(dest_hex: String, content: String) -> Result<Vec<u8>> {
-    let dest_bytes = hex::decode(&dest_hex).map_err(|_| anyhow!("Invalid Hex"))?;
-    let my_id_hex = get_my_identity()?;
+    let dest_bytes = hex::decode(dest_hex)?;
+    let path = state::get_db_path();
+    let db = db::Database::init(&path)?;
+    let my_id = db.get_identity()?.ok_or(anyhow::anyhow!("No Identity"))?;
+    let my_id_hex = hex::encode(my_id);
     let payload = json!({ "sender": my_id_hex, "content": content }).to_string();
     mesh::generate_advertisement_packet(&dest_bytes, &payload)
 }
 
 pub fn ingest_mesh_packet(data: Vec<u8>) -> Result<()> {
-    with_db(|db| {
-        if let Ok(packet) = bincode::deserialize::<mesh::BlePacket>(&data) {
-             if let Ok(Some(my_root)) = db.get_identity() {
-                 let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
-                 for time in [now, now - 3600] {
-                    let full_mb = crypto::generate_mailbox(&my_root, time);
-                    if let Ok(mb_bytes) = hex::decode(&full_mb) {
-                        let my_short = u32::from_be_bytes([mb_bytes[0], mb_bytes[1], mb_bytes[2], mb_bytes[3]]);
-                        if my_short == packet.mb_short {
-                            let mut nonce = [0u8; 24];
-                            nonce[0..4].copy_from_slice(&packet.ts_short.to_be_bytes());
-                            if let Ok(plain) = crypto::decrypt(&my_root, &nonce, &packet.ct) {
-                                let raw_text = String::from_utf8_lossy(&plain).to_string();
-                                let (sender, content) = if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw_text) {
-                                    (val["sender"].as_str().unwrap_or("Unknown").to_string(), 
-                                     val["content"].as_str().unwrap_or("").to_string())
-                                } else { ("Unknown".to_string(), raw_text) };
-                                
-                                let alias = db.resolve_sender(&sender);
-                                db.save_message(&uuid::Uuid::new_v4().to_string(), &alias, &content, false)?;
-                                return Ok(());
-                            }
-                        }
-                    }
-                 }
-             }
-             let _ = db.save_transit(&data);
-        }
-        Ok(())
-    })
+    let path = state::get_db_path();
+    mesh::handle_incoming_bytes(&data, &path)
 }
 
 pub fn get_transit_packet() -> Result<Vec<u8>> {
-    with_db(|db| {
-        if rand::random::<bool>() {
-            if let Ok(Some(transit)) = db.get_random_transit() {
-                return Ok(transit);
-            }
-        }
-        Ok(Vec::new())
-    })
+    let path = state::get_db_path();
+    if let Ok(Some(packet)) = mesh::get_next_packet_to_broadcast(&path) {
+        return Ok(packet);
+    }
+    Ok(Vec::new())
 }
 
 pub struct ChatMessage {
